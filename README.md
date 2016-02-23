@@ -11,6 +11,6 @@ Prerequisite
 To use the library to process and analyse your data you will first need to install a MySQL database and ingest the .sql files into them.
 Command to ingest files using MySQL command line interface (CLI):
 
-mysql> source <path to .sql file>/<name of the.sql file>
+mysql\> source \<path to .sql file\>/\<name of the.sql file\>
 
 
