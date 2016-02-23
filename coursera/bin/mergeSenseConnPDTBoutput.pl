@@ -7,6 +7,8 @@ require 5.0;
 #
 # Author : Muthu Kumar C
 # Created in Fall, 2015
+# Script to produce *.spans2 file from pdtb output files
+# they append the actual connectives to the spans file
 #
 ##
 
@@ -72,11 +74,12 @@ elsif(!defined $dbname){
 }
 
 chdir("$path/..");
+system("mkdir logs");
 chdir("$dbname"."_pdtbinput");
 system("cd");
 
-open( my $log, ">$path/../logs/$progname.err.log") 
-		or die "\n Cannot open $path/../logs/$progname.err.log";
+open( my $log, ">$path/../logs/$progname.log") 
+		or die "\n Cannot open $path/../logs/$progname.log";
 		
 my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
 foreach my $forum_id ( sort @$forums){
@@ -94,7 +97,7 @@ foreach my $forum_id ( sort @$forums){
 		my $txt_file_path = "$path/../$dbname"."_pdtbinput/$forum_id";
 		my $out_file_path = "$txt_file_path/output";
 		
-		print "\n Doing thread-$thread_id in forum-$forum_id";
+		print $log "\n Doing thread-$thread_id in forum-$forum_id";
 		
 		open (my $SENSEFILE, "<$out_file_path/$thread_id.txt.exp.out") 
 								or die "\n Cannot open read file pdtbinput at $out_file_path \n $!";
@@ -123,9 +126,10 @@ foreach my $forum_id ( sort @$forums){
 		}
 		if (keys %post_ids ne keys %$post_spans){
 			print "\n Exception: post span mismatch: $forum_id \t $thread_id ". (keys %post_ids) . "\t". (keys %$post_spans);
-			# foreach my $post_counter (sort {$a<=>$b} keys %post_ids){
-				# print "\n $post_counter \t $post_ids{$post_counter} \t $post_spans->{$post_counter}{'bol'} \t $post_spans->{$post_counter}{'eol'}";
-			# }
+			print $log "\n Exception: post span mismatch: $forum_id \t $thread_id ". (keys %post_ids) . "\t". (keys %$post_spans);
+			foreach my $post_counter (sort {$a<=>$b} keys %post_ids){
+				print $log "\n $post_counter \t $post_ids{$post_counter} \t $post_spans->{$post_counter}{'bol'} \t $post_spans->{$post_counter}{'eol'}";
+			}
 			exit(0);			
 		}
 		

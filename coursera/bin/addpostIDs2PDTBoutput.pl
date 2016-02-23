@@ -48,10 +48,11 @@ sub Help{
 my $help				= 0;
 my $quite				= 0;
 my $debug				= 0;
+my $dbname				= undef;
 my $courseid			= undef;
 
 $help = 1 unless GetOptions(
-				#'dbname=s'		=> \$dbname,	#reason, classiccomp, coursera_dump
+				'dbname=s'		=> \$dbname,
 				'course=s'		=> \$courseid,
 				'debug'			=> \$debug, 
 				'h' 			=> \$help,
@@ -63,49 +64,64 @@ if ( $help ){
 	exit(0);
 }
 
-#my $dbh	= Model::getDBHandle(undef,1,'mysql',$dbname);
-my $dbh 	= Model::getDBHandle("$path/../testdb",1,undef,'cs6207.db');
+my $dbh		= Model::getDBHandle(undef,1,'mysql',$dbname);
+# my $dbh 	= Model::getDBHandle("$path/../testdb",1,undef,'cs6207.db');
 
-#my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
-my $forums	= $dbh->selectcol_arrayref("select id from forum where courseid = \'$courseid\'
-												and id not in (10011,10012,10014,10013,10003)");
+chdir("$path/..");
+system("mkdir logs");
+
+open( my $log, ">$path/../logs/$progname.log") 
+		or die "\n Cannot open $path/../logs/$progname.log";
 
 if(!defined $dbh){
 	print $log "Exception. Db handle is undefined";
 	print "Exception. Db handle is undefined"; exit(0);
 }
-elsif(!defined $courseid){
-	print $log "Exception. courseid is undefined";
-	print "Exception. courseid is undefined"; exit(0);
+
+if(defined $dbname){
+	$courseid = $dbname;
+}
+elsif(defined $dbname){
+	$dbname	= $courseid;
 }
 
-chdir("$path/..");
-chdir("$courseid"."_pdtbinput");
+if(!defined $courseid && !defined $dbname){
+	print $log "Exception. courseid is undefined";
+	print "Exception. courseid is undefined";
+	print $log "Exception. dbname is undefined"; 
+	print "Exception. dbname is undefined"; 
+	exit(0);
+}
+
+chdir("$dbname"."_pdtbinput");
 system("cd");
 
-open( my $log, ">$path/../logs/$progname.err.log") 
-		or die "\n Cannot open $path/../logs/$progname.err.log";
-		
+# my $forums	= $dbh->selectcol_arrayref("select id from forum where courseid = \'$courseid\'");
+my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
 foreach my $forum_id ( sort @$forums){
+	if (!defined $forum_id){
+		print $log "Exception. forum_id is undefined for $courseid"; 
+		print "Exception. forum_id is undefined for $courseid"; 
+	}
+	
 	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001) {	next;	}
-	#my $threads	= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
-	my $threads	= $dbh->selectall_hashref("select * from thread where forumid = $forum_id and courseid = \'$courseid\'", 'id');
+	my $threads	= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
+	# my $threads	= $dbh->selectall_hashref("select * from thread where forumid = $forum_id and courseid = \'$courseid\'", 'id');
 	
 	if (keys %$threads < 1){ 	next;	}
 	
 	foreach my $thread_id (keys %$threads){
-		my $forum_id = $threads->{$thread_id}{'forumid'};
-		#my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
-		my $posts 	 = $dbh->selectall_hashref("select * from post where thread_id = $thread_id and courseid = \'$courseid\' order by post_order", 'id');
+		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
+		# my $posts 	 = $dbh->selectall_hashref("select * from post where thread_id = $thread_id and courseid = \'$courseid\' order by post_order", 'id');
 		
 		my $txt_file_path = "$path/../$courseid"."_pdtbinput/$forum_id";
 		my $out_file_path = "$txt_file_path/output";
 		
 		#if( -e "$out_file_path/$thread_id.txt.exp2.out" ){ next; }
-		print "\n Doing $thread_id in $forum_id";
+		print $log "\n Doing $thread_id in $forum_id";
 		
 		open (my $SENSEFILE, "<$out_file_path/$thread_id.txt.exp.out") 
-								or die "\n Cannot open read file pdtbinput at $out_file_path/$thread_id \n $!";
+					or die "\n Cannot read file $out_file_path/$thread_id \n $!";
 		my $sense_counter  = 0;
 		my %senses = ();
 		while (my $line = <$SENSEFILE>){
@@ -121,8 +137,8 @@ foreach my $forum_id ( sort @$forums){
 			$post_ids{$post_counter} = $post_id;
 			$post_counter ++;
 			
-			#my $cmnts =  $dbh->selectall_hashref("select * from forum_comments where thread_id = $thread_id and post_id = $post_id", 'id');
-			my $cmnts =  $dbh->selectall_hashref("select * from comment where thread_id = $thread_id and post_id = $post_id and courseid = \'$courseid\' order by id", 'id');
+			my $cmnts =  $dbh->selectall_hashref("select * from forum_comments where thread_id = $thread_id and post_id = $post_id", 'id');
+			# my $cmnts =  $dbh->selectall_hashref("select * from comment where thread_id = $thread_id and post_id = $post_id and courseid = \'$courseid\' order by id", 'id');
 			foreach my $id (sort {$a<=>$b} keys %$cmnts){
 				$post_ids{$post_counter} = $id;
 				$post_counter ++;
@@ -130,8 +146,9 @@ foreach my $forum_id ( sort @$forums){
 		}
 		if (keys %post_ids ne keys %$post_spans){
 			print "\n Exception: post span mismatch: $forum_id \t $thread_id ". (keys %post_ids) . "\t". (keys %$post_spans);
+			print $log "\n Exception: post span mismatch: $forum_id \t $thread_id ". (keys %post_ids) . "\t". (keys %$post_spans);
 			foreach my $post_counter (sort {$a<=>$b} keys %post_ids){
-				print "\n $post_counter \t $post_ids{$post_counter} \t $post_spans->{$post_counter}{'bol'} \t $post_spans->{$post_counter}{'eol'}";
+				print $log "\n $post_counter \t $post_ids{$post_counter} \t $post_spans->{$post_counter}{'bol'} \t $post_spans->{$post_counter}{'eol'}";
 			}			
 			exit(0);			
 		}
