@@ -3,7 +3,7 @@ Library for processing MOOC data dumps.  Currently limited to Coursera data.
 
 Coursera data export
 --------------------
-Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MYSQL databases.
+Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MySQL databases.
 A typical data export consists of the following .sql files
 
 Prerequisite
