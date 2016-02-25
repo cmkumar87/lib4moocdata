@@ -70,7 +70,7 @@ if ( $help ){
 }
 
 my $dbh			= Model::getDBHandle(undef,1,'mysql',$in_dbname);
-my $litedbh		= Model::getDBHandle("$path/../data/$out_dbname",0,undef,$out_dbname);
+my $litedbh		= Model::getDBHandle("$path/../data",1,undef,$out_dbname);
 
 if(!defined $in_dbname){
 	print "Exception. input dbname is undefined"; exit(0);
@@ -90,43 +90,53 @@ if(!defined $courseid){
 	print "Exception. courseid not defined"; exit(0);
 }
 
-my $threadsqry = "select id, forum_id, title, num_views, num_posts, votes, instructor_replied, 
+my $threads_query		= "select id, forum_id, title, num_views, num_posts, votes, instructor_replied, 
 												is_spam from forum_threads where forum_id = ?";								
-my $threadsth	= $dbh->prepare("$threadsqry")
-								or die "Couldn't prepare statement \n $threadsqry \n $DBI::errstr\n";
+my $threadsth			= $dbh->prepare("$threads_query")
+								or die "Couldn't prepare statement \n $threads_query \n $DBI::errstr\n";
 
-my $threadinsert_query = "Insert into thread (id, url, forumid, title, num_views, num_posts, 
+my $threadinsert_query	= "Insert into thread (id, url, forumid, title, num_views, num_posts, 
 												votes, inst_replied, courseid, is_spam) 
 							values (?,?,?,?,?,?,?,?,?,?)";
 							
-my $threadinsertsth = $litedbh->prepare($threadinsert_query)
-								or die "Couldn't prepare statement \n threadinsert_query \n $DBI::errstr\n";
+my $threadinsertsth		= $litedbh->prepare($threadinsert_query)
+								or die "Couldn't prepare statement \n $threadinsert_query \n $DBI::errstr\n";
 
-my $postinsert_query = "Insert into post (id,thread_id,original,post_order,
+my $postinsert_query	= "Insert into post (id,thread_id,original,post_order,
 											post_text,votes,user,
 											post_time,forumid,courseid) 
 											values (?,?,?,?,?,?,?,?,?,?)";
-my $postinsertsth = $litedbh->prepare($postinsert_query) 
-								or die "Couldn't prepare statement: $DBI::errstr\n";
+my $postinsertsth		= $litedbh->prepare($postinsert_query) 
+								or die "Couldn't prepare statement: \n $postinsert_query \n $DBI::errstr\n";
 
-my $comminsert_query = "Insert into comment (id,post_id,thread_id,forumid,comment_text,votes,
-												user,post_time,user,courseid) 
-												values (?,?,?,?,?,?,?,?,?,?)";
-my $comminsertsth = $litedbh->prepare($comminsert_query)
+my $comminsert_query	= "Insert into comment (id,post_id,thread_id,comment_text,votes,
+												user,post_time,forumid,courseid) 
+												values (?,?,?,?,?,?,?,?,?)";
+my $comminsertsth		= $litedbh->prepare($comminsert_query)
 								or die "Couldn't prepare statement \n $comminsert_query \n $DBI::errstr\n";
 
-my $userinsert_qurey = "insert into user (id,postid,threadid,courseid) values (?,?,?,?)";
-my $userinsertsth = $litedbh->prepare($userinsert_qurey)
-								or die "Couldn't prepare statement \n $userinsert_qurey \n $DBI::errstr\n";;
+my $userinsert_query	= "insert into user (id, user_title, postid, forumid, threadid,courseid) values (?,?,?,?,?,?)";
+my $userinsertsth		= $litedbh->prepare($userinsert_query)
+								or die "Couldn't prepare statement \n $userinsert_query \n $DBI::errstr\n";;
+								
+my $user_hashmap_select_query	= "select user_id, session_user_id from hash_mapping";
+my $userid_hashvalue_map		=  $dbh->selectall_hashref($user_hashmap_select_query,'user_id')
+											or die "query failed: $user_hashmap_select_query \n $DBI::errstr";
+my $user_accessgroup_query		= "select session_user_id, access_group_id from users";
+my $user_accessgroup_map		=  $dbh->selectall_hashref($user_accessgroup_query,'session_user_id')
+											or die "query failed: $user_accessgroup_query \n $DBI::errstr";
+my $user_title_query			= "select id, forum_title from access_groups";
+my $user_title					=  $dbh->selectall_hashref($user_title_query,'id')
+											or die "query failed: $user_title_query \n $DBI::errstr";
 
-my $foruminsert_query	= "insert into forum (id, forumname) values(?,?)";
-my $forumsth			= $litedbh->prepare($foruminsert_query) 
-								or die "Couldn't prepare statement \n $foruminsert_query \n $DBI::errstr\n";
-			
-my $forum_query	= "select id, forumname from forum where courseid = \'$courseid\'";
-my $forums		= $litedbh->selectall_hashref($forum_query,'id') 
-							or die "Couldn't prepare statement \n $forum_query \n $DBI::errstr\n";
-
+my $foruminsert_query			= "insert into forum (id, forumname, courseid) values(?,?,?)";
+my $foruminsertsth				= $litedbh->prepare($foruminsert_query)
+										or die "Couldn't prepare statement \n $foruminsert_query \n $DBI::errstr\n";
+										
+my $forum_query	= "select id, name from forum_forums";
+my $forums		= $dbh->selectall_hashref($forum_query,'id') 
+							or die "Couldn't prepare statement \n $forum_query \n $DBI::errstr\n";							
+							
 open( my $log, ">$path/../logs/$progname.err.log") 
 		or die "\n Cannot open $path/../logs/$progname.err.log";
 							
@@ -135,10 +145,17 @@ foreach my $forum_id (sort keys %$forums){
 	# and homework (aka. assignment) threads
 	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001) {	next;	}
 	
-	print "\n $forum_id";
+	print $log "\n Processing $forum_id of $courseid";
+	
+	my $forumname	= $forums->{$forum_id}{'name'};
+	$foruminsertsth->execute($forum_id,$forumname,$courseid) 
+					or die "Couldn't execute statement \n $foruminsert_query". 
+						"\n args: 	forum-$forum_id||
+									name-$forumname||
+									course-$courseid \n" . $DBI::errstr;
 	
 	$threadsth->execute($forum_id)
-		or die "\n Couldn't execute statement \n $threadsqry \n $DBI::errstr";
+		or die "\n Couldn't execute statement \n $threads_query \n $DBI::errstr";
 						
 	my $threads	= $threadsth->fetchall_hashref('id');
 	
@@ -147,7 +164,7 @@ foreach my $forum_id (sort keys %$forums){
 		next;	
 	}
 	
-	print "\n # of threads " . (keys %$threads);
+	print $log "\n # of threads " . (keys %$threads);
 	
 	foreach my $threadid (keys %$threads){
 		my $url = "https://class.coursera.org/$courseid/forum/thread?thread_id=$threadid";
@@ -159,7 +176,7 @@ foreach my $forum_id (sort keys %$forums){
 							or die "Couldn't execute statement ";
 		
 		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $threadid", 'id');
-		print "\n $threadid -- \t # of posts " . (keys %$posts);
+		print $log "\n $threadid -- \t # of posts " . (keys %$posts);
 		foreach my $post (sort {$a<=>$b} keys %$posts){
 			my $post_text = $posts->{$post}{'post_text'};
 			$post_text =~ s/\<((br)|(BR))\s*\/>/ /g;
@@ -170,10 +187,10 @@ foreach my $forum_id (sort keys %$forums){
 			$postinsertsth->execute( $posts->{$post}->{'id'}, $threadid, 
 						  $posts->{$post}->{'original'}, $posts->{$post}->{'post_order'}, 
 						  $post_text,
-						  $posts->{$post}->{'votes'}, $posts->{$post}->{'user_agent'}, 
+						  $posts->{$post}->{'votes'}, $posts->{$post}->{'user_id'}, 
 						  $posts->{$post}->{'post_time'}, $forum_id, $courseid						
 					)
-					or die "Couldn't execute statement \n  $postinsertquery".
+					or die "Couldn't execute statement \n  $postinsert_query".
 							"\n args: post-$post || thread-$threadid || course-$courseid || forum-$forum_id " . $DBI::errstr;
 			
 			my $comments =  $dbh->selectall_hashref("select * from forum_comments where thread_id = $threadid and post_id = $post", 'id');
@@ -183,28 +200,38 @@ foreach my $forum_id (sort keys %$forums){
 				$cmnt_text =~ s/<.*?>/ /g;			
 				$cmnt_text =~ s/\n|\r//g;
 				$cmnt_text =  decode_entities($cmnt_text);
-
+				
 				$comminsertsth->execute($comments->{$comment}->{'id'}, $comments->{$comment}->{'post_id'}, 
-						$threadid, $forum_id,
-						$comments->{$comment}->{'comment_text'}, 
+						$threadid, $comments->{$comment}->{'comment_text'}, 
 						$comments->{$comment}->{'votes'},$comments->{$comment}->{'user'},
 						$comments->{$comment}->{'post_time'}, 
-						$comments->{$comment}->{'user_agent'}, $courseid
-					)	or die "Couldn't execute statement \n $comminsertquery".
+						$forum_id, $courseid
+					)	or die "Couldn't execute statement \n $comminsert_query".
 								"\n args: $comments->{$comment}->{'id'}	|| 
 									$comments->{$comment}->{'post_id'}	|| 
 									thread-$comments->{$comment}->{'thread_id'}	|| 
 									forum-$forum_id \n" . $DBI::errstr;
-								
-				$userinsertsth->execute($comments->{$comment}{'user_id'},$post,$threadid,$courseid) 
-									or die "Couldn't execute statement \n $userinsertqry".
-									"\n args: user-$comments->{$comment}{'user_id' || 
+				
+				my $user_id					= $comments->{$comment}{'user_id'};
+				my $session_user_id_hash	= $userid_hashvalue_map->{$user_id}{'session_user_id'};
+				my $access_group			= $user_accessgroup_map->{$session_user_id_hash}{'access_group_id'};
+				my $user_title				= $user_title->{$access_group}{'forum_title'};
+				
+				$userinsertsth->execute($user_id,$user_title,$post,$forum_id,$threadid,$courseid) 
+									or die "Couldn't execute statement \n $userinsert_query".
+									"\n args: user-$user_id || 
 											  post-$post|| thread-$threadid || 
 											  course-$courseid \n" . $DBI::errstr;
 			}
-			$userinsertsth->execute($posts->{$post}{'user_id'},$post,$threadid,$courseid) 
-								or die "Couldn't execute statement \n $userinsertqry". 
-									"\n args: user-$posts->{$post}{'user_id'}||
+
+			my $user_id					= $posts->{$post}{'user_id'};
+			my $session_user_id_hash	= $userid_hashvalue_map->{$user_id}{'session_user_id'};
+			my $access_group			= $user_accessgroup_map->{$session_user_id_hash}{'access_group_id'};
+			my $user_title				= $user_title->{$access_group}{'forum_title'};
+			
+			$userinsertsth->execute($user_id,$user_title,$post,$forum_id,$threadid,$courseid) 
+								or die "Couldn't execute statement \n $userinsert_query". 
+									"\n args: 	user-$user_id||
 												post-$post|| thread-$threadid ||
 												course-$courseid \n" . $DBI::errstr;
 		}
@@ -212,3 +239,4 @@ foreach my $forum_id (sort keys %$forums){
 }
 
 close $log;
+
