@@ -65,7 +65,7 @@ if ( $help ){
 }
 
 my $dbh		= Model::getDBHandle(undef,1,'mysql',$dbname);
-# my $dbh 	= Model::getDBHandle("$path/../testdb",1,undef,'cs6207.db');
+# my $dbh 	= Model::getDBHandle("$path/../testdb",1,undef,$dbname);
 
 chdir("$path/..");
 system("mkdir logs");
@@ -96,6 +96,20 @@ if(!defined $courseid && !defined $dbname){
 chdir("$dbname"."_pdtbinput");
 system("cd");
 
+#hashmap of removed files
+my %removed_files = ();
+open( my $rem_fh, "<$path/../data/Removed_files.txt") 
+		or die "\n Cannot open $path/../data/Removed_files.txt";
+while (my $line = <$rem_fh>){
+	chomp $line;
+	if ($line =~ /^$/){ next; }
+	if ($line =~ /^\s*$/){ next; }
+	if ($line =~ /^Folder.*$/){ next; }
+	$line	=~ s/^(.*)?\.txt$/$1/;
+	$removed_files {$line} = 1;
+}
+close $rem_fh;
+
 # my $forums	= $dbh->selectcol_arrayref("select id from forum where courseid = \'$courseid\'");
 my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
 foreach my $forum_id ( sort @$forums){
@@ -111,6 +125,11 @@ foreach my $forum_id ( sort @$forums){
 	if (keys %$threads < 1){ 	next;	}
 	
 	foreach my $thread_id (keys %$threads){
+		#check for removed files
+		if (!exists $removed_files{$thread_id}){
+			next;
+		}
+	
 		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
 		# my $posts 	 = $dbh->selectall_hashref("select * from post where thread_id = $thread_id and courseid = \'$courseid\' order by post_order", 'id');
 		
@@ -200,6 +219,8 @@ foreach my $forum_id ( sort @$forums){
 }
 
 close $log;
+
+print "\n ##Done##";
 
 sub getspans{
 	my ($thread_id,$txt_file_path,$out_file_path) = @_;

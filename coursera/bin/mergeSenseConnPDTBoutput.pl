@@ -78,6 +78,20 @@ system("mkdir logs");
 chdir("$dbname"."_pdtbinput");
 system("cd");
 
+#hashmap of removed files
+my %removed_files = ();
+open( my $rem_fh, "<$path/../data/Removed_files.txt") 
+		or die "\n Cannot open $path/../data/Removed_files.txt";
+while (my $line = <$rem_fh>){
+	chomp $line;
+	if ($line =~ /^$/){ next; }
+	if ($line =~ /^\s*$/){ next; }
+	if ($line =~ /^Folder.*$/){ next; }
+	$line	=~ s/^(.*)?\.txt$/$1/;
+	$removed_files {$line} = 1;
+}
+close $rem_fh;
+
 open( my $log, ">$path/../logs/$progname.log") 
 		or die "\n Cannot open $path/../logs/$progname.log";
 		
@@ -91,6 +105,11 @@ foreach my $forum_id ( sort @$forums){
 	if (keys %$threads < 1){ 	next;	}
 	
 	foreach my $thread_id (keys %$threads){
+		#check for removed files
+		if (!exists $removed_files{$thread_id}){
+			next;
+		}
+		
 		my $forum_id = $threads->{$thread_id}{'forum_id'};
 		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
 		
