@@ -54,16 +54,20 @@ sub getDBHandle{
 
 sub getCourses{
 	my ($dbh, $dataset, $downloaded) = @_;
-	my $query = "select distinct courseid from forum where ";
-
+	my $query = "select distinct courseid from forum ";
+	
+	if (defined $downloaded || defined $dataset){
+		$query .= "where ";
+	}
+	
 	if (defined $downloaded){
-		$query .= "downloaded = $downloaded";
+		$query .= "downloaded = $downloaded ";
 	}else{
-		$query .= "downloaded = 0";
+		$query .= "downloaded = 0 ";
 	}
 	
 	if (defined $dataset){
-		$query .= " and dataset = \'$dataset\'";
+		$query .= "and dataset = \'$dataset\' ";
 	}
 	
 	my $courses = $dbh->selectcol_arrayref($query) or die "$DBI::errstr\n";
@@ -78,7 +82,7 @@ sub getforumname{
 }
 
 sub getSubForums{
-	my ($dbh,$courses,$forumid,$forumname,$dataset, $recrawl) = @_;
+	my ($dbh, $courses, $forumid, $forumname, $dataset, $recrawl) = @_;
 	my $query = "select id,courseid,forumname from forum where downloaded ";
 	if(defined $recrawl){
 		$query .= " = 1";
@@ -284,4 +288,34 @@ sub updateHash{
 	return ($terms, $term_course_count);
 }
 
+sub updateInterventionDensity{
+	my ($dbh) = @_;
+	my $threadqry = "select count(id) from thread where courseid = ? and forumid = ?";
+	my $sth = $dbh->prepare($threadqry) 
+					or die "Exception: calcualteInterventionDensity: can't prepare \n $threadqry: $! ";	
+	
+	my $interqry = $threadqry .= " and inst_replied = 1";
+	my $intersth = $dbh->prepare($interqry) 
+					or die "Exception: updateInterventionDensity: can't prepare \n $interqry: $! ";
+	
+	my $updateqry = "Update forum set numthreads = ?, numinter = ? where courseid = ? and id = ?";
+	my $updatesth = $dbh->prepare($updateqry) 
+					or die "Exception: updateInterventionDensity: can't prepare \n $updateqry: $! ";
+					
+	my $forums = Model::getCourses($dbh,undef,undef);
+	foreach  (@$forums){
+		my $forumid		= $_->[0];
+		my $courseid	= $_->[1];
+		my $num_threads;
+		my $num_interthreads;
+		$sth->execute($courseid,$forumid) 
+				or die "updateInterventionDensity: can't exec $threadqry $!";
+		$num_threads = @{$sth->fetchrow_arrayref()}[0];
+		
+		$intersth->execute($courseid,$forumid) 
+				or die "updateInterventionDensity: can't exec $interqry $!";
+		$num_interthreads = @{$intersth->fetchrow_arrayref()}[0];
+		$updatesth->execute($num_threads, $num_interthreads, $courseid, $forumid);
+	}
+}
 1;

@@ -38,7 +38,7 @@ my $outputVersion = "1.0";
 ### END user customizable section
 
 sub License{
-	#print STDERR "# Copyright 2014 \251 Muthu Kumar C\n";
+	print STDERR "# Copyright 2014 \251 Muthu Kumar C\n";
 }
 
 sub Help{

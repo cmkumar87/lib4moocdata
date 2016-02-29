@@ -91,18 +91,19 @@ if(defined $course){
 	push (@courses, $course);
 }
 else{
-	my $forumidsquery = "select distinct courseid from forum ";
-	my $forumrows		= $dbh->selectall_arrayref($forumidsquery) 
+	my $coursesquery 		= "select distinct courseid from forum ";
+	my $courses_arrayref	= $dbh->selectcol_arrayref($forumidsquery) 
 									or die "Query failed! $! \n $forumidsquery !";
+	@courses				= @$courses_arrayref;
 }
 
-my $termDFquery	= "select termid, term, courseid, sum(df) sumdf from termDF ";
-$termDFquery	.=  " where courseid = ? ";
-$termDFquery	.=  " group by termid";
-my $termDFquerysth = $dbh->prepare($termDFquery) or die "df prepare failed $!";
+my $termDFquery		 = "select termid, term, courseid, sum(df) sumdf from termDF ";
+$termDFquery		.=  " where courseid = ? ";
+$termDFquery		.=  " group by termid";
+my $termDFquerysth	 = $dbh->prepare($termDFquery) or die "df prepare failed $!";
 
-my $inserttermIDF 	= "insert into termIDF (termid,term,df,courseid) ";
-$inserttermIDF 	.= "values(?,?,?,?)";
+my $inserttermIDF 	 = "insert into termIDF (termid,term,df,courseid) ";
+$inserttermIDF 		.= "values(?,?,?,?)";
 my $inserttermIDFsth = $dbh->prepare($inserttermIDF)
 										or die "prepare for insert faield $!";
 										
@@ -114,7 +115,7 @@ if($df){
 		$termDFquerysth->execute($courseid);
 		$dfterms = $termDFquerysth->fetchall_arrayref();
 		if (scalar @$dfterms == 0) {
-			warn "$courseid doesn\'t have terms";
+			print $log "$courseid doesn\'t have terms";
 		}
 		
 		#defer commit by tuning off autocommit
@@ -135,8 +136,12 @@ if($df){
 
 if ($idf){
 	my $termIDFquery = "select termid, courseid, df from termIDF ";
-	$termIDFquery = Model::appendListtoQuery($termIDFquery,\@courses, ' courseid ', ' where ');
+	if (defined $courseid){
+		$termIDFquery = Model::appendListtoQuery($termIDFquery,\@courses, ' courseid ', ' where ');
+	}
 	print "\nExecuting... $termIDFquery";
+	print $log "\nExecuting... $termIDFquery";
+	
 	my $terms = $dbh->selectall_arrayref($termIDFquery);
 
 	my $num_threads = $dbh->selectall_hashref("select courseid, sum(numthreads) 
@@ -154,11 +159,13 @@ if ($idf){
 		# log() calculates natural logarithm
 		# but we need log base 10
 		my $idf = log($num_threads->{$courseid} / $df)/log(10);
-		print "\n Updating IDF for $courseid";
+		print $log "\n Updating IDF for $courseid \t $termid";
 		$updateIDF->execute($idf,$termid,$courseid);
 	}
 	#commit
 	$dbh->commit;
 }
 
+print $log "\n #Done#"
 Utility::exit_script($progname,\@ARGV);
+print "\n #Done#"

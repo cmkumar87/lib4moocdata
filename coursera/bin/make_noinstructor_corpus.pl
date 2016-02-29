@@ -49,32 +49,23 @@ sub Help{
 
 my $help				= 0;
 my $quite				= 0;
-my $debug				= 0;
-my $threadid			= 0;
+my $courseid			= 0;
 my $threadtype			= undef;
 my $dataset				= 0;
 my $forumtype;
-my $dentisy_calculation = 0;
+my $density_calculation = 0;
 my $posttable 			= undef;
 my $commenttable		= undef;
-my $test				= 0;
-my $pilot				= 0;
-my $corpus				= 'pilot';
 my $project;
 my $forumname;
 
 $help = 1 unless GetOptions(
-				'density'	=> \$dentisy_calculation,
-				'data=s'	=> \$dataset,
+				'density'	=> \$density_calculation,
+				'course=s'	=> \$courseid,
 				'forum=s'	=> \$forumname,
 				'thread=s'	=> \$threadtype,
-				'post'		=> \$posttable,
-				'comment'	=> \$commenttable,
 				'project=s'	=> \$project,
-				'corpus=s'	=> \$corpus,
-				'pilot'		=> \$pilot,
-				'test'		=> \$test,
-				'debug'		=> \$debug,
+				'dbname'	=> \$dbname,
 				'h' 		=> \$help,
 				'q' 		=> \$quite
 			);
@@ -94,11 +85,12 @@ my $forumidsquery = "select id,courseid,forumname from forum ";
 my @courses;
 
 if(defined $courseid)
+	push(@courses,$courseid);
 	$forumidsquery = Model::appendListtoQuery($forumidsquery,\@courses, 'courseid ', 'where ');
 }
 
 if ($project eq 'all'){
-	print "\n Project code: EDSCA";
+	print $log "\n Project code: EDSCA";
 	$forumidsquery.= "	and forumname in('General','Lecture','Homework','Exam',
 											'Discussion','PeerA', 'Project')";
 }
@@ -111,15 +103,8 @@ else{
 
 my $forumrows = $dbh->selectall_arrayref($forumidsquery) 
 								or die "Courses query failed! ";
-if($dentisy_calculation){
-	my @datasets;
-	if(!defined $dataset){
-		@datasets = @{$dbh->selectall_arrayref("select dataset from forum where downloaded = 1")}[0];
-	}
-	else{
-		push (@datasets,$dataset);
-	}
-	Preprocess::calcualeInterventionDensity($dbh,@datasets);
+if($density_calculation){
+	Model::updateInterventionDensity($dbh);
 }
 
 my $instpostqry = "select u.postid, p.post_time from user u, post p
@@ -200,24 +185,23 @@ my $notathreadqry = "select distinct threadid from user u
 							where u.courseid = ? 
 									and u.forumid = ?
 									and u.user_title in (\"Instructor\", \"Staff\")";
-									# and u.forumid = f.id
-									# and u.courseid =  f.courseid
-									# f.forumname in ('Errata','Exam','Lecture','Homework')";
 my $notathreadsth = $dbh->prepare($notathreadqry)
 										or die "Couldn't prepare statement: $DBI::errstr\n";
 
-open (my $log, ">$path/../data/make_inst_corpus.log.txt") or die "open failed";
+open (my $log, ">$path/../logs/$progname.log") 
+				or die "cannot open file $path/../logs/$progname.log for writing";
 ##############
 
 foreach my $forumrow ( @$forumrows ){
-	my $forumid = @$forumrow[0];
-	my $coursecode = @$forumrow[1];
-	$forumtype = @$forumrow[2];
+	my $forumid		= @$forumrow[0];
+	my $coursecode	= @$forumrow[1];
+	$forumtype		= @$forumrow[2];
 	my @threads;
 	
 	my $number_of_threads = @{$dbh->selectcol_arrayref($countofthreads,undef,$forumid,$coursecode)}[0];
-	if( $number_of_threads == 0){ print "\n Skipping $coursecode \t $forumid "; next; }
+	if( $number_of_threads == 0){ print $log "\n Skipping $coursecode \t $forumid "; next; }
 	
+	#Get all threads intervened by instructor or a Ta at least once
 	if($threadtype eq 'inst'){
 		@threads = @{Model::Getthreadids($dbh, $coursecode, $forumid, "inst_replied=1")};
 	}
@@ -229,7 +213,8 @@ foreach my $forumrow ( @$forumrows ){
 	
 	foreach my $thread (@threads){
 		my $threadid = $thread->[0];
-
+		
+		## Get instructor / TA posts for this thread
 		$instpoststh->execute($threadid,$coursecode,$forumid) 
 											or die $DBI::errstr;
 		my $instposts = $instpoststh->fetchall_hashref('postid');
@@ -253,6 +238,7 @@ foreach my $forumrow ( @$forumrows ){
 			($firstpostTime,$firstpost) = ($postTime < $firstpostTime) ? ($postTime,$post): ($firstpostTime,$firstpost)
 		}
 		print $log "$coursecode \t $threadid \t $firstpostTime \t $firstpost\n";
+		
 		foreach my $post (keys %$instcmnts){
 			my $postTime = $instcmnts->{$post}->{'post_time'};
 			($firstpostTime,$firstpost) = ($postTime < $firstpostTime) ? ($postTime,$post): ($firstpostTime,$firstpost);	
@@ -263,12 +249,12 @@ foreach my $forumrow ( @$forumrows ){
 		my $posts = $poststh->fetchall_hashref('id');
 
 		if ($poststh->rows == 0){
-			print "No post records for $threadid $coursecode $forumid \n";
+			print $log "No post records for $threadid $coursecode $forumid \n";
 			next;
 		}
 		
 		foreach my $post ( keys %$posts ){
-			print "$coursecode ||$posts->{$post}->{'thread_id'} ||$posts->{$post}->{'id'}\n";
+			print $log "$coursecode ||$posts->{$post}->{'thread_id'} ||$posts->{$post}->{'id'}\n";
 			 $postinsertsth->execute( $posts->{$post}->{'id'}, $threadid, 
 									  $posts->{$post}->{'original'}, $posts->{$post}->{'post_order'}, 
 									  $posts->{$post}->{'url'}, $posts->{$post}->{'post_text'}, 
@@ -282,11 +268,11 @@ foreach my $forumrow ( @$forumrows ){
 									or die $DBI::errstr;
 			my $comments = $commentssth->fetchall_hashref('id');
 			if (keys %$comments == 0) {
-				print "No cmnt records for $threadid $coursecode $forumid \n";
+				print $log "No cmnt records for $threadid $coursecode $forumid \n";
 				next;
 			}
 			foreach my $comment ( keys %$comments ){
-				print "$coursecode || $comments->{$comment}->{'id'} ||$comments->{$comment}->{'thread_id'} ||$comments->{$comment}->{'post_id'}\n";
+				print $log "$coursecode || $comments->{$comment}->{'id'} ||$comments->{$comment}->{'thread_id'} ||$comments->{$comment}->{'post_id'}\n";
 				if ( !defined $coursecode || !defined $comments->{$comment}->{'id'} || !defined $comments->{$comment}->{'thread_id'} || !defined $comments->{$comment}->{'post_id'}){
 					exit(0);
 				}
@@ -306,4 +292,6 @@ foreach my $forumrow ( @$forumrows ){
 	}
 }
 
+print $log "\n #Done#"
+Utility::exit_script($progname,\@ARGV);
 print "\n #Done#"

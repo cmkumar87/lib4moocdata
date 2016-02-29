@@ -273,36 +273,4 @@ sub normalizePeriods{
 	$text =~ s/[\?\!]\.+/\./g;
 	return $text;
 }
-
-sub calcualteInterventionDensity{
-	my ($dbh,@datasets) = @_;
-	my $threadqry = "select count(id) from thread where courseid = ? and forumid = ?";
-	my $sth = $dbh->prepare($threadqry) 
-					or die "calcualteInterventionDensity: can't prepare $threadqry: $! ";
-	
-	my $interqry = $threadqry .= " and inst_replied = 1";
-	my $intersth = $dbh->prepare($interqry) 
-					or die "calcualteInterventionDensity: can't prepare $interqry: $! ";
-	
-	my $updateqry = "Update forum set numthreads = ?, numinter = ? where courseid = ? and id = ?";
-	my $updatesth = $dbh->prepare($updateqry) 
-					or die "calcualteInterventionDensity: can't prepare $updateqry: $! ";
-	foreach my $dataset (@datasets){		
-		my $forums = Model::getSubForums($dbh,undef,undef,$dataset);
-		foreach  (@$forums){
-			my $forumid = $_->[0];
-			my $courseid = $_->[1];
-			my $num_threads ;
-			my $num_interthreads ;
-			$sth->execute($courseid,$forumid) 
-				or die "calcualteInterventionDensity: can't exec $threadqry $!";
-			$num_threads = @{$sth->fetchrow_arrayref()}[0];
-			
-			$intersth->execute($courseid,$forumid) 
-				or die "calcualteInterventionDensity: can't exec $interqry $!";
-			$num_interthreads = @{$intersth->fetchrow_arrayref()}[0];
-			$updatesth->execute($num_threads, $num_interthreads, $courseid, $forumid);
-		}
-	}
-}
 1;
