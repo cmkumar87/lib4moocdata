@@ -54,7 +54,7 @@ sub getDBHandle{
 
 sub getCourses{
 	my ($dbh, $dataset, $downloaded) = @_;
-	my $query = "select distinct courseid from forum ";
+	my $query = "select distinct id, courseid from forum ";
 	
 	if (defined $downloaded || defined $dataset){
 		$query .= "where ";
@@ -62,15 +62,13 @@ sub getCourses{
 	
 	if (defined $downloaded){
 		$query .= "downloaded = $downloaded ";
-	}else{
-		$query .= "downloaded = 0 ";
 	}
 	
 	if (defined $dataset){
 		$query .= "and dataset = \'$dataset\' ";
 	}
 	
-	my $courses = $dbh->selectcol_arrayref($query) or die "$DBI::errstr\n";
+	my $courses = $dbh->selectall_arrayref($query) or die "$DBI::errstr\n $query";
 	return $courses;
 }
 
@@ -302,8 +300,8 @@ sub updateInterventionDensity{
 	my $updatesth = $dbh->prepare($updateqry) 
 					or die "Exception: updateInterventionDensity: can't prepare \n $updateqry: $! ";
 					
-	my $forums = Model::getCourses($dbh,undef,undef);
-	foreach  (@$forums){
+	my $forumrows = Model::getCourses($dbh,undef,undef);
+	foreach  (@$forumrows){
 		my $forumid		= $_->[0];
 		my $courseid	= $_->[1];
 		my $num_threads;

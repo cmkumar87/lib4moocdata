@@ -88,13 +88,22 @@ sub removeStopWords{
 	my @unstopped;
 	my $sentid = 1;
 	my %Config = ();
-	Config::Simple->import_from('app.ini', \%Config);
+	Config::Simple->import_from('app.ini', \%Config)
+								or die Config::Simple->error();
+	#sanity check
+	if( keys %Config eq 0){
+		print "\n Exception: app.ini config not read properly"; exit(0);
+	}
 	
 	#local variable
 	my $stopwords;
 	if( $strictness == 4){
 		my %nonstopword = ();
 		my $stopwordfile = $Config{'stopwordfile'};
+		if(!defined $stopwordfile){
+			die "Exception. Stopword file location not configured";
+		}
+		
 		open (my $NONSTOP ,"<$stopwordfile") 
 					or die "removeStopWords: cannot open nonstopwords.dict for reading";
 		while (<$NONSTOP>){

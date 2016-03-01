@@ -14,7 +14,6 @@ use FindBin;
 use Getopt::Long;
 use Lingua::EN::Ngram;
 use utf8::all;
-use Algorithm::LibLinear;
 
 my $path;	# Path to binary directory
 
@@ -41,7 +40,7 @@ sub License{
 
 sub Help{
 	print STDERR "Usage: $progname -h\t[invokes help]\n";
-  	print STDERR "       $progname [-thread -stem -q -debug]\n";
+  	print STDERR "       $progname -dbname [-density -thread -project -q ]\n";
 	print STDERR "Options:\n";
 	print STDERR "\t-q \tQuiet Mode (don't echo license).\n";
 	print STDERR "\t-debug \tPrint additional debugging info to the terminal.\n";
@@ -49,23 +48,23 @@ sub Help{
 
 my $help				= 0;
 my $quite				= 0;
-my $courseid			= 0;
-my $threadtype			= undef;
-my $dataset				= 0;
+my $dbname				= undef;
+my $courseid			= undef;
+my $threadtype			= 'inst';
 my $forumtype;
-my $density_calculation = 0;
+my $density_calculation = 1;
 my $posttable 			= undef;
 my $commenttable		= undef;
-my $project;
+my $project				= 'intervention';
 my $forumname;
 
 $help = 1 unless GetOptions(
-				'density'	=> \$density_calculation,
+				'dbname=s'	=> \$dbname,
 				'course=s'	=> \$courseid,
+				'project=s'	=> \$project,
+				'density'	=> \$density_calculation,
 				'forum=s'	=> \$forumname,
 				'thread=s'	=> \$threadtype,
-				'project=s'	=> \$project,
-				'dbname'	=> \$dbname,
 				'h' 		=> \$help,
 				'q' 		=> \$quite
 			);
@@ -79,30 +78,38 @@ if (!$quite){
 	License();
 }
 
-my $dbh = Model::getDBHandle($db_path,undef,undef,$dbname);
+my $dbh 			= Model::getDBHandle("$path/../data",1,undef,$dbname);
 
-my $forumidsquery = "select id,courseid,forumname from forum ";
+open (my $log, ">$path/../logs/$progname.log") 
+				or die "cannot open file $path/../logs/$progname.log for writing";
+
+my $forumidsquery	= "select id,courseid,forumname from forum ";
 my @courses;
 
-if(defined $courseid)
-	push(@courses,$courseid);
-	$forumidsquery = Model::appendListtoQuery($forumidsquery,\@courses, 'courseid ', 'where ');
-}
-
 if ($project eq 'all'){
-	print $log "\n Project code: EDSCA";
-	$forumidsquery.= "	and forumname in('General','Lecture','Homework','Exam',
+	print $log "\n Using data from all forumtypes";
+	print "\n Using data from all forumtypes";
+	$forumidsquery	.= "	where forumname in('General','Lecture','Homework','Exam',
 											'Discussion','PeerA', 'Project')";
 }
 elsif ($project eq 'intervention'){
-	$forumidsquery.= "	and forumname in('Errata','Lecture','Homework','Exam')";
+	print $log "\n Using data from Errata, Lecture, Homework, Exam forumtypes";
+	print "\n Using data from Errata, Lecture, Homework, Exam forumtypes";
+	$forumidsquery	.= "	where forumname in('Errata','Lecture','Homework','Exam')";
 }
 else{
-	$forumidsquery.= "	and forumname in(\'$forumname\')";
+	print $log "\n Using data from $forumname forumtypes";
+	print "\n Using data from $forumname forumtypes";
+	$forumidsquery	.= "	where forumname in(\'$forumname\')";
+}
+
+if(defined $courseid){
+	push( @courses, $courseid );
+	$forumidsquery = Model::appendListtoQuery($forumidsquery,\@courses, 'courseid ', 'and ');
 }
 
 my $forumrows = $dbh->selectall_arrayref($forumidsquery) 
-								or die "Courses query failed! ";
+								or die "Query failed! $DBI::errstr \n $forumidsquery \n";
 if($density_calculation){
 	Model::updateInterventionDensity($dbh);
 }
@@ -174,22 +181,22 @@ my $postinsertquery = "Insert into $posttable (id,thread_id,original,post_order,
 											url,post_text,votes,user,post_time,
 											forumid,courseid) 
 											values (?,?,?,?,?,?,?,?,?,?,?)";
-my $postinsertsth = $dbh->prepare($postinsertquery) or die "Couldn't prepare statement: $DBI::errstr\n";
+my $postinsertsth = $dbh->prepare($postinsertquery) 
+							or die "Couldn't prepare statement: $DBI::errstr\n";
 
 my $comminsertquery = "Insert into $commenttable (id,post_id,thread_id,forumid,url,comment_text,votes,
 												user,post_time,user_name,courseid) 
 												values (?,?,?,?,?,?,?,?,?,?,?)";
-my $comminsertsth = $dbh->prepare($comminsertquery) or die "Couldn't prepare statement: $DBI::errstr\n";
+my $comminsertsth = $dbh->prepare($comminsertquery) 
+							or die "Couldn't prepare statement: $DBI::errstr\n";
 
 my $notathreadqry = "select distinct threadid from user u
 							where u.courseid = ? 
 									and u.forumid = ?
 									and u.user_title in (\"Instructor\", \"Staff\")";
 my $notathreadsth = $dbh->prepare($notathreadqry)
-										or die "Couldn't prepare statement: $DBI::errstr\n";
+							or die "Couldn't prepare statement: $DBI::errstr\n";
 
-open (my $log, ">$path/../logs/$progname.log") 
-				or die "cannot open file $path/../logs/$progname.log for writing";
 ##############
 
 foreach my $forumrow ( @$forumrows ){
@@ -207,7 +214,7 @@ foreach my $forumrow ( @$forumrows ){
 	}
 	elsif($threadtype eq 'nota'){
 		$notathreadsth->execute($coursecode, $forumid) 
-									or die "Couldn't execute statement: $DBI::errstr\n";
+								or die "Couldn't execute statement: $DBI::errstr\n";
 		@threads = @{$notathreadsth->fetchall_arrayref()};
 	}
 	
@@ -231,16 +238,16 @@ foreach my $forumrow ( @$forumrows ){
 			next;
 		}
 		
-		my $firstpostTime = 99999999999;
-		my $firstpost = 999999999;
+		my $firstpostTime	= 99999999999;
+		my $firstpost		= 999999999;
 		foreach my $post (keys %$instposts){
-			my $postTime = $instposts->{$post}->{'post_time'};
+			my $postTime 	= $instposts->{$post}->{'post_time'};
 			($firstpostTime,$firstpost) = ($postTime < $firstpostTime) ? ($postTime,$post): ($firstpostTime,$firstpost)
 		}
-		print $log "$coursecode \t $threadid \t $firstpostTime \t $firstpost\n";
+		print $log "\n $coursecode \t $threadid \t $firstpostTime \t $firstpost";
 		
 		foreach my $post (keys %$instcmnts){
-			my $postTime = $instcmnts->{$post}->{'post_time'};
+			my $postTime 				= $instcmnts->{$post}->{'post_time'};
 			($firstpostTime,$firstpost) = ($postTime < $firstpostTime) ? ($postTime,$post): ($firstpostTime,$firstpost);	
 		}
 		
@@ -249,12 +256,12 @@ foreach my $forumrow ( @$forumrows ){
 		my $posts = $poststh->fetchall_hashref('id');
 
 		if ($poststh->rows == 0){
-			print $log "No post records for $threadid $coursecode $forumid \n";
+			print $log "\n No post records for $threadid $coursecode $forumid";
 			next;
 		}
 		
 		foreach my $post ( keys %$posts ){
-			print $log "$coursecode ||$posts->{$post}->{'thread_id'} ||$posts->{$post}->{'id'}\n";
+			print $log "\n $coursecode ||$posts->{$post}->{'thread_id'} ||$posts->{$post}->{'id'}";
 			 $postinsertsth->execute( $posts->{$post}->{'id'}, $threadid, 
 									  $posts->{$post}->{'original'}, $posts->{$post}->{'post_order'}, 
 									  $posts->{$post}->{'url'}, $posts->{$post}->{'post_text'}, 
@@ -268,11 +275,11 @@ foreach my $forumrow ( @$forumrows ){
 									or die $DBI::errstr;
 			my $comments = $commentssth->fetchall_hashref('id');
 			if (keys %$comments == 0) {
-				print $log "No cmnt records for $threadid $coursecode $forumid \n";
+				print $log "\n No cmnt records for $threadid $coursecode $forumid";
 				next;
 			}
 			foreach my $comment ( keys %$comments ){
-				print $log "$coursecode || $comments->{$comment}->{'id'} ||$comments->{$comment}->{'thread_id'} ||$comments->{$comment}->{'post_id'}\n";
+				print $log "\n $coursecode || $comments->{$comment}->{'id'} ||$comments->{$comment}->{'thread_id'} ||$comments->{$comment}->{'post_id'}";
 				if ( !defined $coursecode || !defined $comments->{$comment}->{'id'} || !defined $comments->{$comment}->{'thread_id'} || !defined $comments->{$comment}->{'post_id'}){
 					exit(0);
 				}
@@ -292,6 +299,6 @@ foreach my $forumrow ( @$forumrows ){
 	}
 }
 
-print $log "\n #Done#"
+print $log "\n #Done#";
 Utility::exit_script($progname,\@ARGV);
 print "\n #Done#"

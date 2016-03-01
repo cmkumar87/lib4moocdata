@@ -42,6 +42,7 @@ my $courseid;
 my @courses;
 
 $help = 1 unless GetOptions(
+				'dbname=s'	=>	\$dbname,
 				'mode=s'	=>  \$mode,
 				'course=s'	=>	\$courseid,
 				'maxid=i'	=>	\$maxid,
