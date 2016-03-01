@@ -126,7 +126,7 @@ foreach my $forum_id ( sort @$forums){
 	
 	foreach my $thread_id (keys %$threads){
 		#check for removed files
-		if (!exists $removed_files{$thread_id}){
+		if (exists $removed_files{$thread_id}){
 			next;
 		}
 	

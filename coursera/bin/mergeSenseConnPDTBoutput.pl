@@ -96,6 +96,12 @@ open( my $log, ">$path/../logs/$progname.log")
 		or die "\n Cannot open $path/../logs/$progname.log";
 		
 my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
+
+if(!defined $forums || scalar @$forums eq 0){
+	print "Exception: forums empty. Chck db!";
+	exit(0);
+}
+
 foreach my $forum_id ( sort @$forums){
 	# we are only interested in threads from lecture, exam, errata 
 	# and homework (aka. assignment) threads
@@ -106,7 +112,7 @@ foreach my $forum_id ( sort @$forums){
 	
 	foreach my $thread_id (keys %$threads){
 		#check for removed files
-		if (!exists $removed_files{$thread_id}){
+		if (exists $removed_files{$thread_id}){
 			next;
 		}
 		
