@@ -98,8 +98,8 @@ system("cd");
 
 #hashmap of removed files
 my %removed_files = ();
-open( my $rem_fh, "<$path/../data/Removed_files.txt") 
-		or die "\n Cannot open $path/../data/Removed_files.txt";
+open( my $rem_fh, "<$path/../data/Removed_files_$courseid".".txt") 
+		or die "\n Cannot open $path/../data/Removed_files_$courseid.txt";
 while (my $line = <$rem_fh>){
 	chomp $line;
 	if ($line =~ /^$/){ next; }
