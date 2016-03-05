@@ -147,6 +147,7 @@ if(!defined $dbh){
 open (my $log ,">$path/../logs/$progname.log")
 			or die "cannot open file $path/../logs/$progname.log for writing";
 
+print $log "\n Using database file at $datahome/$dbname";
 # counts only posts where an instructor/TA/Staff has replied to a post
 print  $log "\n threadtype.. $threadtype";
 print  $log "\t tftab: $tftab \t posttab: $posttable \t commenttab: $commenttable ";

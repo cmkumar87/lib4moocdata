@@ -42,6 +42,7 @@ sub Help{
 	print STDERR "Usage: $progname -h\t[invokes help]\n";
   	print STDERR "       $progname -dbname [-density -thread -project -q ]\n";
 	print STDERR "Options:\n";
+	print STDERR "\t-thread \t specify a threadtype: 'inst' or 'nota'.\n";
 	print STDERR "\t-q \tQuiet Mode (don't echo license).\n";
 	print STDERR "\t-debug \tPrint additional debugging info to the terminal.\n";
 }
@@ -78,10 +79,22 @@ if (!$quite){
 	License();
 }
 
-my $dbh 			= Model::getDBHandle("$path/../data",1,undef,$dbname);
-
 open (my $log, ">$path/../logs/$progname.log") 
 				or die "cannot open file $path/../logs/$progname.log for writing";
+
+if(!defined $dbname){
+	print $log "\n Exception: dbname not defined"; 
+	print "\n Exception: dname not defined"; exit(0);
+}
+
+my $dbh 			= Model::getDBHandle("$path/../data",1,undef,$dbname);
+
+if(!defined $dbh){
+	print $log "\n Exception: dbhandle not defined"; 
+	print "\n Exception dbhandle not defined"; exit(0);
+}
+
+print $log "\n Using database file at $path/../data/$dbname";
 
 my $forumidsquery	= "select id,courseid,forumname from forum ";
 my @courses;
@@ -110,6 +123,11 @@ if(defined $courseid){
 
 my $forumrows = $dbh->selectall_arrayref($forumidsquery) 
 								or die "Query failed! $DBI::errstr \n $forumidsquery \n";
+
+if (!defined $forumrows || keys %$forumrows eq 0){
+	print $log "\n No forums selected. Exisitng..."; exit(0);
+}
+
 if($density_calculation){
 	Model::updateInterventionDensity($dbh);
 }
@@ -217,6 +235,8 @@ foreach my $forumrow ( @$forumrows ){
 								or die "Couldn't execute statement: $DBI::errstr\n";
 		@threads = @{$notathreadsth->fetchall_arrayref()};
 	}
+	
+	print $log "\n Doing $forumid of $coursecode";
 	
 	foreach my $thread (@threads){
 		my $threadid = $thread->[0];
