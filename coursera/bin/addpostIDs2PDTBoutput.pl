@@ -111,7 +111,7 @@ while (my $line = <$rem_fh>){
 close $rem_fh;
 
 # my $forums	= $dbh->selectcol_arrayref("select id from forum where courseid = \'$courseid\'");
-my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
+my $forums		= $dbh->selectcol_arrayref("select distinct id from forum_forums");
 foreach my $forum_id ( sort @$forums){
 	if (!defined $forum_id){
 		print $log "Exception. forum_id is undefined for $courseid"; 
@@ -119,7 +119,7 @@ foreach my $forum_id ( sort @$forums){
 	}
 	
 	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001) {	next;	}
-	my $threads	= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
+	my $threads		= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
 	# my $threads	= $dbh->selectall_hashref("select * from thread where forumid = $forum_id and courseid = \'$courseid\'", 'id');
 	
 	if (keys %$threads < 1){ 	next;	}
@@ -130,8 +130,8 @@ foreach my $forum_id ( sort @$forums){
 			next;
 		}
 	
-		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
-		# my $posts 	 = $dbh->selectall_hashref("select * from post where thread_id = $thread_id and courseid = \'$courseid\' order by post_order", 'id');
+		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id order by post_time", 'id');
+		# my $posts  = $dbh->selectall_hashref("select * from post where thread_id = $thread_id and courseid = \'$courseid\' order by post_order", 'id');
 		
 		my $txt_file_path = "$path/../$courseid"."_pdtbinput/$forum_id";
 		my $out_file_path = "$txt_file_path/output";
@@ -156,8 +156,8 @@ foreach my $forum_id ( sort @$forums){
 			$post_ids{$post_counter} = $post_id;
 			$post_counter ++;
 			
-			my $cmnts =  $dbh->selectall_hashref("select * from forum_comments where thread_id = $thread_id and post_id = $post_id", 'id');
-			# my $cmnts =  $dbh->selectall_hashref("select * from comment where thread_id = $thread_id and post_id = $post_id and courseid = \'$courseid\' order by id", 'id');
+			my $cmnts =  $dbh->selectall_hashref("select * from forum_comments where thread_id = $thread_id and post_id = $post_id order by id", 'id');
+			#my $cmnts =  $dbh->selectall_hashref("select * from comment where thread_id = $thread_id and post_id = $post_id and courseid = \'$courseid\' order by id", 'id');
 			foreach my $id (sort {$a<=>$b} keys %$cmnts){
 				$post_ids{$post_counter} = $id;
 				$post_counter ++;

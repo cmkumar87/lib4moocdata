@@ -105,7 +105,8 @@ if(!defined $forums || scalar @$forums eq 0){
 foreach my $forum_id ( sort @$forums){
 	# we are only interested in threads from lecture, exam, errata 
 	# and homework (aka. assignment) threads
-	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001) {	next;	}
+	#--------------debug------------#
+	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001 || $forum_id == 4) {	next;	}
 	my $threads	= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
 	
 	if (keys %$threads < 1){ 	next;	}
