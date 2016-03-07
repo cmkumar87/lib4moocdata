@@ -33,395 +33,20 @@ use lib "$path/../lib";
 use Preprocess;
 use Model;
 
-sub extractCueWordFeatures{
-	my ($text, $cueword_dict, $cueword_dict2) = @_;
-	
-	my %cueword_occurrences = ();
-	$text =~ s/<PAR>/ /g;
-	$text = Preprocess::normalizePeriods($text);
-	$text = Preprocess::normalizeSpace($text);
-	my $sentences = Preprocess::getSentences($text);
-	$sentences = Preprocess::fixApostrophe($sentences);
-	$sentences = Preprocess::removePunctuations( $sentences);
-	
-	my $sid = 1;
-	foreach my $sentence (@$sentences){
-		print "\n$sentence\n";
-		$sentence = lc($sentence);
-		
-		my $tokens = get_tokens($sentence);
-		$tokens = Preprocess::removeOrphanCharacters($tokens);
-		
-		my $pos = -1;
-		
-		if ($sentence =~ /(^so|^then)/ ){
-			$cueword_occurrences{$sid}{$1} = 1;
-			shift @$tokens; $pos++;
-		}
-		
-		foreach my $token (@$tokens){
-			$pos++;
-			if( !exists $cueword_dict->{$token} ){
-				next; 
-			}
-			if ( !exists $cueword_occurrences{$sid}{$token} ){
-				$cueword_occurrences{$sid}{$token} = $pos;			
-			}
-		}
-		
-		my $bigram_positions = getBigramsPos($tokens);		
-		
-		$cueword_occurrences{$sid}
-			 = Utility::merge_hashes($cueword_occurrences{$sid}, extractDomainWordFeatures($bigram_positions, $cueword_dict2));		
-	
-		
-		foreach my $t(keys %{$cueword_occurrences{$sid}}){
-			print "cue: $t\t";
-		}
-		$sid++;
-	}
-	return \%cueword_occurrences;
-}
-
-sub extractDomainWordFeatures{
-	my($bigrams, $domainword_dict) = @_;
-	
-	my %domainword_count = ();
-
-	foreach my $bigram ( sort{$bigrams->{$a}<=>$bigrams->{$b}} (keys %{$bigrams}) ){
-		
-		my $word1 =  (split /\s/,$bigram)[0];
-		my $word2 =  (split /\s/,$bigram)[1];
-		
-		my $pos = $bigrams->{$bigram};
-		$bigram =~ s/\s*//g;
-		
-		my $word = $bigram;
-		
-		if( !exists $domainword_dict->{$bigram} ){
-			
-			if( !exists $domainword_dict->{$word1} ){
-			
-				if( !exists $domainword_dict->{$word2} ){
-					next;
-				}
-				else{
-					$word = $word2;
-				}
-			}
-			else{
-				$word = $word1;
-			}
-		}
-		
-		if ( !exists $domainword_count{$word} ){
-			$domainword_count{$word} = $pos;
-		}
-	}
-	return \%domainword_count;
-}
-
-sub extractFeatures{
-	my($text, $pos, $domainword_dict, $debug) = @_;
-	
-	if( !defined $text || $text eq '' ) { return; }
-	
-	# features to extract
-	my $hascite = 0;
-	my $hasurl = 0;
-	my $textlength = 0;
-	my $hastimeref = 0;
-	my $posbigrams;
-	
-	#length of post in words excluding punctuations
-	
-	#timeref boolean
-	if ( $text =~ /\<TIME\_REF\>/ ){
-		$hastimeref = 1;
-	}
-
-	$text = Preprocess::replaceURL($text);
-	
-	my $sentences = Preprocess::getSentences($text);
-	# TODO find if sentence is question. 
-	# this is an interesting feature
-	
-	# quotation/citation features
-	my $quotes = Preprocess::getQuotes($sentences);
-	
-	my $extracted_sentences = Preprocess::splitParentheses($sentences);
-	foreach (@$extracted_sentences){
-		push \@$sentences, $_;
-	}
-	
-	## PARA MARKERS DISAPPEAR AFTER THE NEXT STEP ##
-	$sentences = Preprocess::removeMarkers($sentences);
-	
-	#POS tagging
-	my $tagged_sentences = undef;
-	
-	if ($pos){
-		$tagged_sentences = getPOStagged($sentences,$debug);
-		#Create POS bigrams
-		$posbigrams = createPOSBigrams($tagged_sentences);
-	}
-	
-	#Extracting ngram features respecting sentence boundaries
-	$sentences = Preprocess::fixApostrophe($sentences);
-	$sentences = Preprocess::removePunctuations($sentences);
-	
-	# Lowercase and tokenize to words
-	my $tokens;
-	my %word_count;
-	my %bigram_count;
-	my %reasoning_cuewords_count =();
-	my %domainword_counts = ();
-	
-	my %sentlengths;
-	my %numcontentwords;
-	my $avgsentlength;
-	
-	my $sid = 0;
-	foreach (@$sentences){
-		$sid++;
-		$_ = lc($_);
-		
-		$tokens = get_tokens($_);
-		$tokens = Preprocess::removeOrphanCharacters($tokens);
-		
-		$sentlengths{$sid} = scalar @$tokens;
-		
-		#Remove stopwords
-		my $gram_input = Preprocess::removeStopWords($tokens,1);
-		$gram_input = Preprocess::removeModals($gram_input);
-		
-		$numcontentwords{$sid} = scalar @$gram_input;
-		
-		my $gram_text = join " ", @$gram_input;
-		my $bigram = Lingua::EN::Bigram->new;
-		$bigram->text( $gram_text );
-		
-		my $bigram_positions = getBigramsPos($gram_input);
-		
-		#domain words detection
-		$domainword_counts{$sid} = extractDomainWordFeatures
-									($bigram_positions, $domainword_dict);
-=pod		
-		# this is useless
-		my @bigram_count = $bigram->bigram_count;
-		foreach (keys %{$bigram->bigram_count}){
-			if( !exists $bigram_count{$_} ){
-				$bigram_count{$_} =  $bigram->bigram_count->{$_} ;
-			}
-			else{
-				$bigram_count{$_} += $bigram->bigram_count->{$_};
-			}
-		}
-=cut
-	}
-	
-	#Find average sentence length for this post
-	foreach ( keys %sentlengths ){
-		$avgsentlength += $sentlengths{$_};
-	}
-	$avgsentlength = $avgsentlength/(keys %sentlengths);
-	
-	return(\%sentlengths, \%numcontentwords, $avgsentlength, 
-			$hastimeref, $hasurl, \%domainword_counts, $tagged_sentences, $posbigrams );
-}
-
-sub createPOSBigrams{
-	my ($tagged_sentences) = @_;
-	my %posbigrams = ();
-	foreach my $sid ( sort{$a <=> $b} (keys %{$tagged_sentences}) ){
-		my $sentence = $tagged_sentences->{$sid};
-		$sentence =~ s/>(.*?)</ /g;
-		$sentence =~ s/[\"\,\'\?\!\_\&\=\:\\\/\<\>\(\)\[\]\{\}\%\@\#\!\*\+\-\^\.]/ /g;
-		$sentence =~ s/\s+((pp)|(ppc)|(ppd)|(ppl)|(ppr)|(pps)|(lrb)|(rrb)|(sym))\s+/ /g;
-		$sentence = Preprocess::normalizeSpace($sentence);
-		
-		my $bigraminputtokens = get_tokens($sentence);
-		
-		my $tokenid = 0;
-		foreach my $t (@$bigraminputtokens){
-			$t = $t.$tokenid;
-			$tokenid++;			
-		}
-		
-		my $temp = getBigramsPos($bigraminputtokens);
-		
-		my %temp2 = ();
-		foreach my $bi ( sort{$temp->{$a} <=> $temp->{$b}} (keys %{$temp}) ){
-			my $value = $temp->{$bi};
-			$bi =~ s/[0-9]//g;
-			$temp2{$bi} = $value;
-		}
-		
-		$posbigrams{$sid} = \%temp2;
-	}
-	return \%posbigrams;
-}
-
-sub getBigramsPos{
-	my ($gram_input) = @_;
-	my %bigram_positions = ();
-	
-	my $pos = 0;
-	foreach my $gram (@$gram_input){
-		# Failsafe for end of array
-		if ($pos+1 >= scalar (@$gram_input)){ last; }
-		
-		my $bigram = $gram . " " . (@$gram_input)[$pos+1];
-		$bigram_positions{$bigram} = $pos;
-		$pos++;
-	}
-	
-	return \%bigram_positions;
-}
-
-sub getPOStagged{
-	my($sentences,$debug) = @_;
-	my %tagged_sentences = ();
-	my $sid = 1;
-	foreach (@$sentences){
-			# Create a parser object
-			my $posTagger = new Lingua::EN::Tagger;
-
-			# Add part of speech tags to a text
-			my $tagged_text = $posTagger->add_tags($_);
-			if ($debug){		print $tagged_text."\n";	}
-			$tagged_sentences{$sid} = $tagged_text;
-			$sid ++;
-	}
-	return \%tagged_sentences;
-}
-
-sub extractNgrams{
-	my ($text, $n, $stem, $stopword) = @_;
-	
-	$text = Preprocess::replaceURL($text);	
-	$text = Preprocess::replaceTimeReferences($text);
-	$text = Preprocess::replaceMath($text);
-	my $sentences = Preprocess::getSentences($text);
-	$sentences = Preprocess::removeMarkers($sentences);
-	$sentences = Preprocess::removePunctuations($sentences);
-
-	my $tokens = Preprocess::getTokens($sentences,0);
-	
-	#lowercase tokens. This affects stopword removal.
-	foreach (@$tokens){
-		$_  = lc($_);
-	}
-	
-	if(!$stopword){
-		# curated list of 100+ stopwords. Minimal reduction
-		$tokens = Preprocess::removeStopWords($tokens,4);
-	}
-	else{
-		# a standard strict filtering of 600 odd terms
-		$tokens = Preprocess::removeStopWords($tokens,3);
-	}
-	
-	if( $stem ){
-		$tokens = Preprocess::stem($tokens);
-	}
-	
-	$tokens = Preprocess::removeOrphanCharacters($tokens);	
-	#chunk tokens by sentences and remember order of appearance of words by chunk
-	my $gramtext = join ' ', @$tokens;
-	my $ngrams = Lingua::EN::Ngram->new;
-	$ngrams->text($gramtext);
-	
-	# term frequency
-	my $grams = $ngrams->ngram( $n );
-	
-	# the ngrams package screws up some tokens
-	# reducing some terms to orphan characters 
-	# and to stopwords such as 'a' and 'th'
-	my @ngramtokens;
-	foreach my $ngram ( keys %$grams ) {
-		push ( @ngramtokens, (split (/\s/, $ngram)) );
-	}
-	
-	my $gramtokens = \@ngramtokens;
-	if(!$stopword){
-		# curated list of stopwords. Minimal reduction
-		$gramtokens = Preprocess::removeStopWords($gramtokens,4);
-	}
-	else{
-		# a standard strict filtering of 600 odd terms
-		$gramtokens = Preprocess::removeStopWords($gramtokens,3);
-	}
-	
-	$gramtokens = Preprocess::removeOrphanCharacters($gramtokens);
-	
-	my %filteredtokens = (); 
-	foreach (@$gramtokens){
-		$filteredtokens{ $_ } = 1;
-	}
-	
-	foreach my $ngram ( keys %$grams ) {
-		my @ngramtokens = split (/\s/, $ngram);
-		foreach my $gram ( @ngramtokens ) {
-			if ( !exists $filteredtokens{$gram} || scalar (@ngramtokens) < $n ){
-				delete $grams->{$ngram};
-				last;
-			}
-		}
-	}
-
-	return $grams;
-}
-
-sub getMaxTfs{
-	my ($dbh,$courses) = @_;
-	my $qry = "select termid, maxtf, courseid 
-					from termFreqMax where courseid in (";
-	foreach my $course (@$courses){
-		$qry .= " \'$course\',";
-	}
-	$qry =~ s/\,$//;
-	$qry .= " ) ";
-	
-	my $sth = $dbh->prepare($qry) or die "cannot prepare maxtfs qry \n $!";
-	$sth->execute() or die "cannot execute maxtfs qry \n $!";
-	my @maxtfs_arr = @{$sth->fetchall_arrayref()};
-	my %maxtfs = ();
-	foreach my $row (@maxtfs_arr) {
-		$maxtfs{$row->[2]}{$row->[0]} = $row->[1];		
-	}
-	return \%maxtfs;
-}
-
-sub normalizeTermWeights{
-	my($term_vector, $terms, $num_inter, $max_tf) = @_;
-	
-	foreach my $termid (keys %$term_vector ){
-		my $tf = $term_vector->{$termid};
-		# Normalize term weights for #threads and #interventions
-		# in this course
-		$tf = normalize( $tf, $max_tf->{$termid}, $num_inter);
-		$term_vector->{$termid} = $tf;
-	}
-	
-	return $term_vector;
-}
-
 sub generateTrainingFile{
 	my (	$FH, $dbh, $threadcats,
 			$unigrams, $freqcutoff, $stem, $term_length, $tftype, $idftype,
-			$tprop, $posttime, $diffw, $numw, $numsentences,
-			$prof, $courseref, $nonterm_courseref, $hedging, $affir, $agree,
-			$question, $numq, $numquotes, $senti, $tlength,
-			$forumtype, $forumid, $threadtime, $userfeatures, $solvedness,
-			$titlewords, $assessmentwc, $problemwc, $conclusionwc, $requestwc,
-			$bi, $path, $feature_file,
-			$normalize, $course_samples, $corpus, $corpus_type, $FEXTRACT,
-			$debug, $date_formatter, $votes, $pdtb, $pdtbfilepath, $print_format
+			$tprop, $numw, $numsentences,
+			$courseref, $nonterm_courseref, $affir, $agree,
+			$tlength, $forumtype,
+			$path, $feature_file,
+			$course_samples, $corpus, $corpus_type, $FEXTRACT,
+			$debug, $date_formatter, $pdtb, $pdtbfilepath, $print_format
 		) = @_;	
 
 	my @courses = keys %{$course_samples};
-	my $num_threads_coursewise; my $num_interventions_coursewise;
+	my $num_threads_coursewise; 
+	my $num_interventions_coursewise;
 	
 	if (keys %{$course_samples} == 0){
 		die "\n Exception generateTrainingFile: course samples empty!!";
@@ -446,9 +71,8 @@ sub generateTrainingFile{
 	my $lengthf = 0;
 	my $time	= 0;
 	
-	if ( $prof || $courseref || $nonterm_courseref || $hedging || 
-		 $agree || $affir || $question || $numq || $numquotes || $senti|| $conclusionwc ||
-		 $assessmentwc || $problemwc || $requestwc || $pdtb){
+	if ( $courseref || $nonterm_courseref || 
+		 $agree || $affir || $pdtb){
 		 $lexical = 1;
 	}
 	
@@ -456,14 +80,6 @@ sub generateTrainingFile{
 		$lengthf = 1;
 	}
 	
-	if ($posttime || $threadtime || $forumid){
-		$time =	1;
-	}
-	
-	my $coursewiseIDF = 0; 
-	if($idftype eq  'cwise'){
-		$coursewiseIDF = 1;
-	}
 	#thread length features
 	my %thread_length		= ();
 	my %numsentences		= ();
@@ -502,30 +118,6 @@ sub generateTrainingFile{
 	my %num_timereffirstpost	= ();
 	my %hasEquationfirstpost	= ();
 	
-	#discourse features: hedging
-	my %hedgeterm			= ();
-	my %hedgetermdensity	= ();
-	
-	#lexical features
-	my %profmention			= ();
-	my %profmentiondensity	= ();	
-	my %staffmention		= ();
-	my %staffmentiondensity = ();
-	my %conclusionwords		= ();
-	my %assessmentwords		= ();
-	my %requestwords		= ();
-	my %problemwords		= ();	
-	
-	#time features
-	my %meanposttimediff	= ();
-	my %numquestions		= ();
-	my %multiquestions		= ();
-	my %numquotes			= ();
-	my %threadStartTime		= ();
-	my %threadEndTime		= ();
-	
-	my %forumid_vector		= ();;
-	
 	#initialise maximum and minimum values
 	my $maxnum_urlref	= 0.0;			my $minnum_urlref	= 999999999.0;
 	my $maxnum_timeref	= 0.0;			my $minnum_timeref	= 999999999.0;
@@ -554,26 +146,6 @@ sub generateTrainingFile{
 	
 	my $maxaffir		= 0.0;				my $minaffir 		= 9999;
 	my $maxaffirdensity = 0.0;				my $minaffirdensity = 9999;
-	
-	my $maxprofmentions		= 0.0;			my $minprofmentions		= 9999;
-	my $maxavgprofmentions	= 0.0;			my $minavgprofmentions	= 9999;
-	my $maxstaffmentions 	= 0.0;			my $minstaffmentions	= 9999;
-	my $maxavgstaffmentions = 0.0;			my $minavgstaffmentions = 9999;
-	
-	my $maxquestionmarks	= 0.0;			my $minquestionmarks	= 99999;
-	my $maxquotationmarks	= 0.0; 			my $minquotationmarks	= 9999;
-	
-	my $maxmultiquestionmarks	= 0.0; 		my $minmultiquestionmarks 	= 9999;
-	my $maxhedging				= 0.0; 		my $minhedging				= 9999;
-	my $maxhedgingdensity		= 0.0; 		my $minhedgingdensity		= 9999;
-	my $maxtimediff				= 0.0;		my $mintimediff				= 999999999.0;
-	my $maxthreadStartTime		= 0;		my $minthreadStartTime		= 99999999999;
-	my $maxthreadEndTime		= 0;		my $minthreadEndTime		= 99999999999;
-	
-	my $maxassessmentwords	= 0;			my $minassessmentwords	= 999999;
-	my $maxconclusionwords	= 0;			my $minconclusionwords	= 999999;
-	my $maxrequestwords		= 0;			my $minrequestwords		= 999999;
-	my $maxproblemwords		= 0;			my $minproblemwords		= 999999;
 	
 	my $maxpdtbexpansion	= 0;			my $minpdtbexpansion	= 999999;
 	my $maxpdtbcontingency	= 0;			my $minpdtbcontingency	= 999999;
@@ -610,50 +182,16 @@ sub generateTrainingFile{
 	my %maxagreedisagree 		= ();		my %minagreedisagree 		= ();
 	my %maxagreedisagreedensity	= ();		my %minagreedisagreedensity	= ();
 	
-	my %maxprofmentions		= ();			my %minprofmentions		= ();
-	my %maxstaffmentions	= ();			my %minstaffmentions	= ();
-	my %maxavgprofmentions	= ();			my %minavgprofmentions	= ();
-	my %maxavgstaffmentions = ();			my %minavgstaffmentions = ();
-	my %maxquestionmarks	= ();			my %minquestionmarks	= ();
-	
 	open (LOG,">$path/bad_threads.log")
 				or die "cannot open a log file at $path";
-				
-				
-	if($forumid){
-		foreach my $courseid (@courses){
-			my @forumids = @{$dbh->selectall_arrayref("select distinct forumid from thread 
-														where courseid = \"$courseid\"			
-															and docid is not null")};
-			print "\t #courses\t @courses";
-			foreach my $row (@forumids){
-				if(!exists $forumid_vector{$row->[0]} ){
-					$forumid_vector{$row->[0]} = 1;
-					print "\n $courseid \t  $row->[0]";
-				}
-			}
-		}
-	}
-	
-	# Queries
-	my $titlewordqry = "select title from thread where docid = ?";
-	my $titlewordsth = $dbh->prepare($titlewordqry) or die "prepare failed titlewordqry";		
 
 	# load termIDFs to memory
 	my $terms;
 	my $term_course;
 	my $termsstem;
 
-	if($unigrams || $assessmentwc || $problemwc || $requestwc){
-		if($coursewiseIDF){
-			($terms,$term_course)	= Model::getCoursewisetermIDF($dbh,$freqcutoff,0,$corpus,$normalize);
-		}
-		else{
-			$terms		 = Model::getalltermIDF($dbh,$freqcutoff,0,$corpus,$normalize);
-			$term_course = Model::gettermCourse($dbh);
-		}
-		#$termsstem	= Model::getalltermIDF($dbh,$freqcutoff,1,$corpus,$normalize);
-		#if (keys %{$terms} == 0 || keys %{$termsstem} == 0){
+	if($unigrams){
+		$terms		 = Model::getalltermIDF($dbh,$freqcutoff,0,$corpus,$normalize);
 		#sanity check
 		if (keys %{$terms} == 0 ){
 			die "Exception: termIDFs are empty for $corpus_type. Check the tables and the query!\n @$corpus";
@@ -662,7 +200,7 @@ sub generateTrainingFile{
 	
 	# load TFs to memory
 	my %termFrequencies = ();
-	if($unigrams || $assessmentwc || $problemwc || $requestwc){
+	if($unigrams){
 		foreach my $category_id (keys %$threadcats){
 			my $tftab	=	$threadcats->{$category_id}{'tftab'};
 			
@@ -675,7 +213,6 @@ sub generateTrainingFile{
 			}
 			
 			foreach my $courseid (keys %termFrequencies_part ){
-				#print "\ninside loop"; exit(0);
 				foreach my $threadid (keys $termFrequencies_part{$courseid} ){
 					foreach my $termid (keys $termFrequencies_part{$courseid}{$threadid} ){
 						if (!exists $termFrequencies{$courseid}{$threadid}{$termid}){
@@ -711,18 +248,12 @@ sub generateTrainingFile{
 	foreach my $category_id (keys %$threadcats){
 		
 		my $pdtbout = undef;
-		#analysis
-		# if($pdtb){
-			# open($pdtbout, ">$pdtbfilepath/pdtbrelcount_$category_id.txt")
-					# or warn "\n Cannot open file spans at $pdtbfilepath/\n $!";
-		# }
-		#analysis
 		
 		my $posttable		=	$threadcats->{$category_id}{'post'};
 		my $commenttable	=	$threadcats->{$category_id}{'comment'};
 		my $threads			=	$threadcats->{$category_id}{'threads'};
 		
-		if (!$lexical && !$lengthf && !$time){ 
+		if (!$lexical && !$lengthf){ 
 			print "\n Skipping $category_id due to no lexical lengthf or time feature calculations"; next; 
 		}
 		
@@ -778,31 +309,6 @@ sub generateTrainingFile{
 				next;	
 			}
 			
-			if($forumid){
-				$forumid_vector{$forumid_number}	= 1
-			}
-
-			if($threadtime){
-				$threadStartTime{$docid}	= getThreadStime($dbh,$threadid,$courseid,$label);
-				$threadEndTime{$docid}		= getThreadEtime($dbh,$threadid,$courseid,$label);
-			}
-			
-			if($posttime){
-				my $timediff = getMeanPosttimeDifferences($dbh, $threadid, $courseid, $posttimesth, $commenttimesth);
-				if ($timediff == -1 ){ 
-					$meanposttimediff{$docid} = undef;
-					next;
-				}
-				else{
-					#log transformation to prevent loss of precision
-					$meanposttimediff{$docid} = log($timediff)/log(10);
-				}
-				$maxtimediff = ($meanposttimediff{$docid} > $maxtimediff)? $meanposttimediff{$docid} : $maxtimediff;
-				$mintimediff = ($meanposttimediff{$docid} < $mintimediff)? $meanposttimediff{$docid} : $mintimediff;
-			}
-			
-			#if (!$lexical && !$lengthf) { next; }
-			
 			$threadPostlength{$docid} = 
 				@{$dbh->selectcol_arrayref("select count(id) from $posttable where thread_id = $threadid and courseid =\'$courseid\'")}[0];
 			$threadCommentlength{$docid} = 
@@ -810,7 +316,8 @@ sub generateTrainingFile{
 			$numposts{$docid} = $threadPostlength{$docid} + $threadCommentlength{$docid};
 			
 			if($numposts{$docid} == 0 || $threadPostlength{$docid} == 0){
-				print "\n Sanity check failed! $numposts{$docid} \t " . (keys %$posts); exit(0);
+				print "\n Sanity check failed! $numposts{$docid} \t " . (keys %$posts);
+				print LOG "\n Sanity check failed! $numposts{$docid} \t " . (keys %$posts); exit(0);
 			}
 			
 			$thread_length{$docid} = @{$dbh->selectcol_arrayref("select sum(length(post_text)) from $posttable where 
@@ -829,8 +336,8 @@ sub generateTrainingFile{
 			if($pdtb){
 				#initialization
 				my @relations = ('expansion','contingency','temporal','comparison');
-				open (my $SENSE_FILE, "<$pdtbfilepath/$forumid_number/output-muthu/$threadid".".txt.exp2.out")
-								or warn "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output-muthu/$threadid.txt.exp2.out \n $!";
+				open (my $SENSE_FILE, "<$pdtbfilepath/$forumid_number/output/$threadid".".txt.exp2.out")
+								or warn "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output/$threadid.txt.exp2.out \n $!";
 				
 				$pdtbrelation{$docid}{'expansion'}		= 0;
 				$pdtbrelation{$docid}{'contingency'}	= 0;
@@ -842,7 +349,6 @@ sub generateTrainingFile{
 				#initialization of bi relations to 0
 				foreach my $relation1 (@relations){
 					foreach my $relation2 (@relations){
-						#$pdtbrelation{$docid}{$relation1.$relation2} 		= 0;
 						$pdtbrelation{$docid}{$relation1.$relation2."den"}	= 0;
 					}
 				}
@@ -869,7 +375,8 @@ sub generateTrainingFile{
 						$pdtbrelation{$docid}{'contrast'} ++;
 					}
 					else{
-						die "\n Unknown pdtb relation  $fields[5] in post $fields[0] $threadid of forum $forumid_number";
+						print "\n Unknown pdtb relation  $fields[5] in post $fields[0] $threadid of forum $forumid_number";
+						exit(0);
 					}
 					$pdtbrelation{$docid}{'all'}++;
 					
@@ -910,33 +417,10 @@ sub generateTrainingFile{
 					$pdtbrelation{$docid}{'tempden'}		= 0;
 					$pdtbrelation{$docid}{'compden'}		= 0;
 				}
-				
-				# Analysis
-				# print "\n $pdtbrelation{$docid}{'expansion'} \t $pdtbrelation{$docid}{'contingency'} \t $pdtbrelation{$docid}{'temporal'}";
-				# print $pdtbout "\n $forumid_number \t $docid \t $threadid\t" . $pdtbrelation{$docid}{'all'}. "\t"
-				# . $pdtbrelation{$docid}{'expansion'} . "\t" .$pdtbrelation{$docid}{'contingency'} . "\t" . $pdtbrelation{$docid}{'temporal'} . "\t" . $pdtbrelation{$docid}{'contrast'}
-				# . "\t" . $thread_length{$docid} . "\t" . $numposts{$docid};
 			}
 		
 			foreach my $post ( sort {$a <=> $b} keys %$posts){
-				#$thread_length{$docid} += my $numwords = @{$dbh->selectcol_arrayref("select length(post_text) from $posttable where 
-				#								id = $post and thread_id = $threadid and courseid = \'$courseid\'")}[0];
-				#if ( $numwords == 0 ){ next; }
-				
 				my $postText = $posts->{$post}{'post_text'};
-				if($assessmentwc){
-					$assessmentwords{$docid} += getAssessmentWordCount($termFrequencies{$courseid}{$threadid},$terms);
-				}
-				if($problemwc){
-					$problemwords{$docid} += getProblemWordCount($termFrequencies{$courseid}{$threadid},$terms);
-				}
-				if($requestwc){
-					$requestwords{$docid} += getRequestWordCount($termFrequencies{$courseid}{$threadid},$terms);
-				}
-				if($conclusionwc){
-					$conclusionwords{$docid} += getConclusionWordCount($postText);
-				}
-				
 				$postText = Preprocess::replaceURL($postText);
 				$postText = Preprocess::replaceMath($postText);
 				$postText = Preprocess::replaceTimeReferences($postText);
@@ -951,21 +435,7 @@ sub generateTrainingFile{
 					if ( defined $postSentences && $posts->{$post}{'original'} ){
 						$numsentences_first{$docid} = @$postSentences;
 					}
-				}
-				if($numq){
-					$numquestions{$docid} +=  getnumQuestions($postText);
-				}
-				if($numquotes){
-					$numquotes{$docid} += getnumQuotes($postText);
-				}
-				if($senti){
-					$multiquestions{$docid} += getSentiPunct($postText);
-				}
-				if($prof){
-					my($prof_mention, $staff_mention) = hasProfMention($postText);
-					$profmention{$docid} += $prof_mention;
-					$staffmention{$docid} += $staff_mention;
-				}			
+				}		
 				if($nonterm_courseref){
 					my $urlref = getnumURLref($postText);
 					my $timeref = getnumTimeref($postText);
@@ -989,9 +459,6 @@ sub generateTrainingFile{
 					$coursematerialterms_nkd{$docid} += $nakedcount;
 					$coursematerialterms{$docid} += $allcount;
 				}
-				if($hedging){
-					$hedgeterm{$docid} += getHedging($postText);				
-				}
 				if($affir){
 					$affirmations{$docid}  += getAffirmations($postText);
 				}
@@ -1002,24 +469,7 @@ sub generateTrainingFile{
 				$cmntsth->execute($threadid, $courseid, $post) or die "failed to execute $cmntqry";
 				my $comments = $cmntsth->fetchall_hashref('id');
 				foreach my $comment ( sort {$a <=> $b} keys %$comments){
-					#$thread_length{$docid} += my $numwords = @{$dbh->selectcol_arrayref("select length(comment_text) from $commenttable where 
-					#						id = $comment and thread_id = $threadid and courseid = \'$courseid\' and post_id=$post")}[0];
-					#if ( $numwords == 0 ){ next; }
-
 					my $commentText = $comments->{$comment}{'comment_text'};
-					if($assessmentwc){
-						$assessmentwords{$docid} += getAssessmentWordCount($termFrequencies{$courseid}{$threadid},$terms);
-					}
-					if($problemwc){
-						$problemwords{$docid} += getProblemWordCount($termFrequencies{$courseid}{$threadid},$terms);
-					}
-					if($requestwc){
-						$requestwords{$docid} += getRequestWordCount($termFrequencies{$courseid}{$threadid},$terms);
-					}					
-					if($conclusionwc){
-						$conclusionwords{$docid} += getConclusionWordCount($commentText);
-					}
-					
 					$commentText = Preprocess::replaceURL($commentText);
 					$commentText = Preprocess::replaceMath($commentText);
 					$commentText = Preprocess::replaceTimeReferences($commentText);
@@ -1029,20 +479,6 @@ sub generateTrainingFile{
 						if(defined $commentSentences ){ 
 							$numsentences{$docid} += @$commentSentences;
 						}
-					}
-					if($numq){
-						$numquestions{$docid} += getnumQuestions($commentText);
-					}
-					if($numquotes){
-						$numquotes{$docid} += getnumQuotes($commentText);
-					}
-					if($senti){
-						$multiquestions{$docid} += 	getSentiPunct($commentText);
-					}
-					if($prof){
-						my($prof_mention, $staff_mention) = hasProfMention($postText);
-						$profmention{$docid} += $prof_mention;
-						$staffmention{$docid} += $staff_mention;
 					}
 					if($nonterm_courseref){
 						my $urlref = getnumURLref($commentText);
@@ -1060,9 +496,6 @@ sub generateTrainingFile{
 						$coursematerialterms_sfx{$docid} += $suffixcount;
 						$coursematerialterms_nkd{$docid} += $nakedcount;
 						$coursematerialterms{$docid} += $allcount;
-					}
-					if($hedging){
-						$hedgeterm{$docid} += getHedging($commentText);
 					}
 					if($affir){
 						$affirmations{$docid}  += getAffirmations($commentText);
@@ -1110,121 +543,6 @@ sub generateTrainingFile{
 									$minpdtball,
 									"pdtb_all"
 								 );					
-			}
-			
-			if($threadtime){
-				($maxthreadStartTime, $minthreadStartTime) 
-					= 	getMaxMin(	$threadStartTime{$docid} ,
-									$maxthreadStartTime,
-									$minthreadStartTime,
-									"thread_start_time"
-								 );
-				($maxthreadEndTime, $minthreadEndTime) 
-					= 	getMaxMin(	$threadEndTime{$docid} ,
-									$maxthreadEndTime,
-									$minthreadEndTime,
-									"thread_end_time"
-								 );
-			}
-			
-			if($assessmentwc){
-				($maxassessmentwords, $minassessmentwords) 
-					=	getMaxMin(	$assessmentwords{$docid},
-									$maxassessmentwords,
-									$minassessmentwords,
-									"asses_word_count"
-								 );
-			}
-			
-			if($problemwc){
-				($maxproblemwords, $minproblemwords) 
-					=	getMaxMin(	$problemwords{$docid},
-									$maxproblemwords,
-									$minproblemwords,
-									"prob_word_count"
-								 );
-			}
-			
-			if($requestwc){
-				($maxrequestwords, $minrequestwords) 
-					=	getMaxMin(	$requestwords{$docid},
-									$maxrequestwords,
-									$minrequestwords,
-									"request_word_count"
-								 );
-			}
-			
-			if($conclusionwc){
-				($maxconclusionwords, $minconclusionwords) 
-					=	getMaxMin(	$conclusionwords{$docid} ,
-									$maxconclusionwords,
-									$minconclusionwords,
-									"conclusion_word_count"
-								 );
-			}
-			
-			if($prof){
-				$profmentiondensity{$docid} = $profmention{$docid}/$thread_length_nomalizer;
-				$staffmentiondensity{$docid} = $staffmention{$docid}/$thread_length_nomalizer;
-				
-				if ($normalize) {
-					if(!exists $maxprofmentions{$courseid}){
-						$maxprofmentions{$courseid} = 0;
-					}
-					
-					if(!exists $minprofmentions{$courseid}){
-						$minprofmentions{$courseid} = 999999;
-					}
-					
-					if(!exists $maxstaffmentions{$courseid}){
-						$maxstaffmentions{$courseid} = 0;
-					}
-					
-					if(!exists $minstaffmentions{$courseid}){
-						$minstaffmentions{$courseid} = 999999;
-					}
-					
-					($maxprofmentions{$courseid}, $minprofmentions{$courseid}) 
-									=	getMaxMin(	$profmention{$docid},
-													$maxprofmentions{$courseid},
-													$minprofmentions{$courseid},
-													"prof_mentions"
-												);
-					($maxavgprofmentions{$courseid}, $minavgprofmentions{$courseid}) 
-									=	getMaxMin(	$profmentiondensity{$docid},
-													$maxavgprofmentions{$courseid},
-													$minavgprofmentions{$courseid},
-													"prof_mention_density"
-												);
-				}
-				else{
-					($maxprofmentions, $minprofmentions) 
-									=	getMaxMin(	$profmention{$docid},
-													$maxprofmentions,
-													$minprofmentions,
-													"prof_mentions"
-												 );
-
-					($maxavgprofmentions, $minavgprofmentions) 
-									=	getMaxMin(	$profmentiondensity{$docid},
-													$maxavgprofmentions,
-													$minavgprofmentions,
-													"prof_mention_density"
-												 );
-					($maxstaffmentions, $minstaffmentions) 
-									=	getMaxMin(	$staffmention{$docid},
-													$maxstaffmentions,
-													$minstaffmentions,
-													"staff_mentions"
-												 );
-
-					($maxavgstaffmentions, $minavgstaffmentions) 
-									=	getMaxMin(	$staffmentiondensity{$docid},
-													$maxavgstaffmentions,
-													$minavgstaffmentions,
-													"staff_mention_density"
-												 );
-				}
 			}
 			
 			if($numw){
@@ -1311,44 +629,7 @@ sub generateTrainingFile{
 					}
 				}
 			}
-			
-			if($numq){
-				if ($normalize) {
-					($maxquestionmarks{$courseid}, $minquestionmarks{$courseid}) = 
-										getMaxMin($numquestions{$docid},
-												   $maxquestionmarks{$courseid},
-												   $minquestionmarks{$courseid},
-												   "num_questions"
-												  );
-				}
-				else{
-					($maxquestionmarks, $minquestionmarks) = getMaxMin($numquestions{$docid},
-																	   $maxquestionmarks,
-																	   $minquestionmarks,
-																	   "num_questions"
-																	  );
-				}
-			}
-			
-			if($senti){
-				($maxmultiquestionmarks, $minmultiquestionmarks) 
-														= getMaxMin($multiquestions{$docid},
-																    $maxmultiquestionmarks,
-																    $minmultiquestionmarks,
-																	"sentiment"
-																   );
-			}
-			
-			if($numquotes){
-
-				$numquotes{$docid} = $numquotes{$docid}/$numposts{$docid};
-				($maxquotationmarks, $minquotationmarks) = getMaxMin($numquotes{$docid},
-																	 $maxquotationmarks,
-																	 $minquotationmarks,
-																	 "num_quotes"
-																    );
-			}
-			
+		
 			if($courseref ){
 				if ($thread_length_nomalizer eq 0){
 					die "Exception:  $docid \t $courseid: $coursematerialterms{$docid} \n";
@@ -1363,129 +644,6 @@ sub generateTrainingFile{
 																			$thread_length_nomalizer;
 						$coursematerialtermdensity_sfx{$docid} = $coursematerialterms_sfx{$docid} / 
 																			$thread_length_nomalizer;
-					if ($normalize) {
-						if(!exists $maxcoursemateraildensity{$courseid}){
-							$maxcoursemateraildensity{$courseid} = 0.0;
-						}
-						
-						if(!exists $mincoursemateraildensity{$courseid}){
-							$mincoursemateraildensity{$courseid} = 999999.999;
-						}
-
-						($maxcoursemateraildensity{$courseid}, $mincoursemateraildensity{$courseid}) = 
-														getMaxMin(  $coursematerialtermdensity{$docid},
-																	$maxcoursemateraildensity{$courseid},
-																	$mincoursemateraildensity{$courseid},
-																	"courserefdensity"
-																 );
-						#######
-						if(!exists $maxcoursemateraildensity_nkd{$courseid}){
-							$maxcoursemateraildensity_nkd{$courseid} = 0.0;
-						}
-						
-						if(!exists $mincoursemateraildensity_nkd{$courseid}){
-							$mincoursemateraildensity_nkd{$courseid} = 999999.999;
-						}
-						
-						($maxcoursemateraildensity_nkd{$courseid}, $mincoursemateraildensity_nkd{$courseid}) = 
-														getMaxMin(  $coursematerialtermdensity_nkd{$docid},
-																	$maxcoursemateraildensity_nkd{$courseid},
-																	$mincoursemateraildensity_nkd{$courseid},
-																	"courserefden_nkd"
-																 );
-						
-						
-						#######
-						if(!exists $maxcoursemateraildensity_pfx{$courseid}){
-							$maxcoursemateraildensity_pfx{$courseid} = 0.0;
-						}
-						
-						if(!exists $mincoursemateraildensity_pfx{$courseid}){
-							$mincoursemateraildensity_pfx{$courseid} = 999999.999;
-						}
-						($maxcoursemateraildensity_pfx{$courseid}, $mincoursemateraildensity_pfx{$courseid}) = 
-														getMaxMin(  $coursematerialtermdensity_pfx{$docid},
-																	$maxcoursemateraildensity_pfx{$courseid},
-																	$mincoursemateraildensity_pfx{$courseid},
-																	"courserefden_pfx"
-																 );
-						
-						#######
-						if(!exists $maxcoursemateraildensity_sfx{$courseid}){
-							$maxcoursemateraildensity_sfx{$courseid} = 0.0;
-						}
-						
-						if(!exists $mincoursemateraildensity_sfx{$courseid}){
-							$mincoursemateraildensity_sfx{$courseid} = 999999.999;
-						}						
-						($maxcoursemateraildensity_sfx{$courseid}, $mincoursemateraildensity_sfx{$courseid}) = 
-														getMaxMin(  $coursematerialtermdensity_sfx{$docid},
-																	$maxcoursemateraildensity_sfx{$courseid},
-																	$mincoursemateraildensity_sfx{$courseid},
-																	"courserefden_sfx"
-																 );
-						
-						#######
-						if(!exists $maxcoursematerail{$courseid}){
-							$maxcoursematerail{$courseid} = 0;
-						}
-						
-						if(!exists $mincoursematerail{$courseid}){
-							$mincoursematerail{$courseid} = 999999;
-						}
-						($maxcoursematerail{$courseid}, $mincoursematerail{$courseid}) =
-														getMaxMin(  $coursematerialterms{$docid},
-																	$maxcoursematerail{$courseid},
-																	$mincoursematerail{$courseid},
-																	"courseref_all"
-																 );
-								
-						#######
-						if(!exists $maxcoursematerail_nkd{$courseid}){
-							$maxcoursematerail_nkd{$courseid} = 0;
-						}
-						
-						if(!exists $mincoursematerail_nkd{$courseid}){
-							$mincoursematerail_nkd{$courseid} = 999999;
-						}						
-						($maxcoursematerail_nkd{$courseid}, $mincoursematerail_nkd{$courseid}) =
-														getMaxMin(  $coursematerialterms_nkd{$docid},
-																	$maxcoursematerail_nkd{$courseid},
-																	$mincoursematerail_nkd{$courseid},
-																	"courseref_nkd"
-																 );
-						
-						#######
-						if(!exists $maxcoursematerail_pfx{$courseid}){
-							$maxcoursematerail_pfx{$courseid} = 0;
-						}
-						
-						if(!exists $mincoursematerail_pfx{$courseid}){
-							$mincoursematerail_pfx{$courseid} = 999999;
-						}		
-						($maxcoursematerail_pfx{$courseid}, $mincoursematerail_pfx{$courseid}) =
-														getMaxMin(  $coursematerialterms_pfx{$docid},
-																	$maxcoursematerail_pfx{$courseid},
-																	$mincoursematerail_pfx{$courseid},
-																	"courseref_pfx"
-																 );
-
-						#######
-						if(!exists $maxcoursematerail_sfx{$courseid}){
-							$maxcoursematerail_sfx{$courseid} = 0;
-						}
-						
-						if(!exists $mincoursematerail_sfx{$courseid}){
-							$mincoursematerail_sfx{$courseid} = 999999;
-						}	
-						($maxcoursematerail_sfx{$courseid}, $mincoursematerail_sfx{$courseid}) =
-														getMaxMin(  $coursematerialterms_sfx{$docid},
-																	$maxcoursematerail_sfx{$courseid},
-																	$mincoursematerail_sfx{$courseid},
-																	"courseref_sfx"
-																 );
-					}
-					else {
 				
 						($maxcoursemateraildensity, $mincoursemateraildensity) = 
 																getMaxMin(  $coursematerialtermdensity{$docid},
@@ -1542,150 +700,57 @@ sub generateTrainingFile{
 																			$mincoursematerail_sfx,
 																			"courseref_sfx"
 																		 );
-					}
 				}
 			}
 			
 			if(defined $nonterm_courseref){
-				
-				if($normalize){
-					if(defined $num_urlref{$docid} ){
-						if(!exists $maxnum_urlref{$courseid}){
-							$maxnum_urlref{$courseid} = 0;
-						}
-						
-						if(!exists $minnum_urlref{$courseid}){
-							$minnum_urlref{$courseid} = 999999;
-						}
-						($maxnum_urlref{$courseid}, $minnum_urlref{$courseid}) 
-											=	getMaxMin(  $num_urlref{$docid},
-															$maxnum_urlref{$courseid},
-															$minnum_urlref{$courseid},
-															"courseref_url"
-														 );
-					}
-					
-					if(defined $num_urlrefinfirstpost{$docid} ){
-						if(!exists $maxnum_urlreffirstpost{$courseid}){
-							$maxnum_urlreffirstpost{$courseid} = 0;
-						}
-						
-						if(!exists $minnum_urlreffirstpost{$courseid}){
-							$minnum_urlreffirstpost{$courseid} = 999999;
-						}
-						($maxnum_urlreffirstpost, $minnum_urlreffirstpost) 
-											= getMaxMin(	$num_urlrefinfirstpost{$docid},
-															$maxnum_urlreffirstpost{$courseid},
-															$minnum_urlreffirstpost{$courseid},
-															"courseref_url_first"
-														);
-					}
-				
-					if(defined $num_timeref{$docid} ){
-						if(!exists $maxnum_timeref{$courseid}){
-							$maxnum_timeref{$courseid} = 0;
-						}
-						
-						if(!exists $minnum_timeref{$courseid}){
-							$minnum_timeref{$courseid} = 999999;
-						}
-						($maxnum_timeref{$courseid}, $minnum_timeref{$courseid})  
-											=	getMaxMin(  $num_timeref{$docid},
-															$maxnum_timeref{$courseid},
-															$minnum_timeref{$courseid},
-															"courseref_time"
-														 );
-					}
-				
-					if(defined $num_timereffirstpost{$docid} ){
-						if(!exists $maxnum_timereffirstpost{$courseid}){
-							$maxnum_timereffirstpost{$courseid} = 0;
-						}
-						
-						if(!exists $minnum_timereffirstpost{$courseid}){
-							$minnum_timereffirstpost{$courseid} = 999999;
-						}
-						($maxnum_timereffirstpost{$courseid}, $minnum_timereffirstpost{$courseid}) 
-											=	getMaxMin(  $num_timereffirstpost{$docid},
-															$maxnum_timereffirstpost{$courseid},
-															$minnum_timereffirstpost{$courseid},
-															"courseref_time_first"
-											  			 );
-					}
+				if(defined $num_urlref{$docid} ){
+					($maxnum_urlref, $minnum_urlref) =	getMaxMin(  $num_urlref{$docid},
+																	$maxnum_urlref,
+																	$minnum_urlref,
+																	"courseref_url"
+																 );
 				}
-				else{
-					if(defined $num_urlref{$docid} ){
-						($maxnum_urlref, $minnum_urlref) =	getMaxMin(  $num_urlref{$docid},
-																		$maxnum_urlref,
-																		$minnum_urlref,
-																		"courseref_url"
-																	 );
-					}
-				
-					if(defined $num_urlrefinfirstpost{$docid} ){
-						($maxnum_urlreffirstpost, $minnum_urlreffirstpost) = 
-															getMaxMin(	$num_urlrefinfirstpost{$docid},
-																		$maxnum_urlreffirstpost,
-																		$minnum_urlreffirstpost,
-																		"courseref_url_first"
-																	 );
-					}
-				
-					if(defined $num_timeref{$docid} ){
+			
+				if(defined $num_urlrefinfirstpost{$docid} ){
+					($maxnum_urlreffirstpost, $minnum_urlreffirstpost) = 
+														getMaxMin(	$num_urlrefinfirstpost{$docid},
+																	$maxnum_urlreffirstpost,
+																	$minnum_urlreffirstpost,
+																	"courseref_url_first"
+																 );
+				}
+			
+				if(defined $num_timeref{$docid} ){
 
-						($maxnum_timeref, $minnum_timeref)  =	getMaxMin(  $num_timeref{$docid},
-																			$maxnum_timeref,
-																			$minnum_timeref,
-																			"courseref_time"
-																		 );
-					}
-				
-					if(defined $num_timereffirstpost{$docid} ){
+					($maxnum_timeref, $minnum_timeref)  =	getMaxMin(  $num_timeref{$docid},
+																		$maxnum_timeref,
+																		$minnum_timeref,
+																		"courseref_time"
+																	 );
+				}
+			
+				if(defined $num_timereffirstpost{$docid} ){
 
-						($maxnum_timereffirstpost, $minnum_timereffirstpost) 
-															=	getMaxMin(  $num_timereffirstpost{$docid},
-																			$maxnum_timereffirstpost,
-																			$minnum_timereffirstpost,
-																			"courseref_time_first"
-																		 );
-					}
+					($maxnum_timereffirstpost, $minnum_timereffirstpost) 
+														=	getMaxMin(  $num_timereffirstpost{$docid},
+																		$maxnum_timereffirstpost,
+																		$minnum_timereffirstpost,
+																		"courseref_time_first"
+																	 );
 				}
 			}
 			
 			if($affir && defined $affirmations{$docid} ){
 				$affirtermdensity{$docid} = $affirmations{$docid}/$thread_length_nomalizer;
-				
-				if ($normalize) {
-					if(!exists $maxaffir{$courseid}){
-						$maxaffir{$courseid} = 0;
-					}
-					
-					if(!exists $minaffir{$courseid}){
-						$minaffir{$courseid} = 999999;
-					}
-					
-					$maxaffir{$courseid} = ($affirmations{$docid} > $maxaffir{$courseid})?$affirmations{$docid}: $maxaffir{$courseid};
-					$minaffir{$courseid} = ($affirmations{$docid} < $minaffir{$courseid})?$affirmations{$docid}: $minaffir{$courseid};
 
-					if(!exists $maxaffirdensity{$courseid}){
-						$maxaffirdensity{$courseid} = 0;
-					}
-					
-					if(!exists $minaffirdensity{$courseid}){
-						$minaffirdensity{$courseid} = 999999;
-					}
-					
-					$maxaffirdensity{$courseid} = ($affirtermdensity{$docid} > $maxaffirdensity{$courseid})? $affirtermdensity{$docid}: $maxaffirdensity{$courseid};
-					$minaffirdensity{$courseid} = ($affirtermdensity{$docid} < $minaffirdensity{$courseid})? $affirtermdensity{$docid}: $minaffirdensity{$courseid};
-				}
-				else{
 					$maxaffir = ($affirmations{$docid} > $maxaffir)?$affirmations{$docid}: $maxaffir;
 					$minaffir = ($affirmations{$docid} < $minaffir)?$affirmations{$docid}: $minaffir;
 				
 					$maxaffirdensity = ($affirtermdensity{$docid} > $maxaffirdensity)? $affirtermdensity{$docid}: $maxaffirdensity;
 					$minaffirdensity = ($affirtermdensity{$docid} < $minaffirdensity)? $affirtermdensity{$docid}: $minaffirdensity;
-				}
 			}
+			
 			if($agree && defined $agreedisagree{$docid} ){
 				$agreedisagreedensity{$docid} = $agreedisagree{$docid}/$thread_length_nomalizer;
 								
@@ -1694,45 +759,13 @@ sub generateTrainingFile{
 				
 				$maxagreedisagreedensity = ($agreedisagreedensity{$docid} > $maxagreedisagreedensity)? $agreedisagreedensity{$docid}: $maxagreedisagreedensity;
 				$minagreedisagreedensity = ($agreedisagreedensity{$docid} < $minagreedisagreedensity)? $agreedisagreedensity{$docid}: $minagreedisagreedensity;
-			}			
-			if($hedging && defined $hedgeterm{$docid} ){
-				$hedgetermdensity{$docid} = $hedgeterm{$docid}/$thread_length_nomalizer;
-				$maxhedging = ($hedgeterm{$docid} > $maxhedging)?$hedgeterm{$docid}: $maxhedging;
-				$minhedging = ($hedgeterm{$docid} < $minhedging)?$hedgeterm{$docid}: $minhedging;
-				
-				$maxhedgingdensity = ($hedgetermdensity{$docid} > $maxhedgingdensity)? $hedgetermdensity{$docid}: $maxhedgingdensity;
-				$minhedgingdensity = ($hedgetermdensity{$docid} < $minhedgingdensity)? $hedgetermdensity{$docid}: $minhedgingdensity;
 			}
-			
 		}
 		
 		#close $pdtbout;
 	}
 	# first pass ends
-	
-	if($posttime){
-		print "MAX & MIN time diffs: $maxtimediff \t $mintimediff\n";
-		checkmaxminexception($maxtimediff,$mintimediff, 'posttime');
-	}
-	
-	if($threadtime){
-		print "\n MAX & MIN thread Start time : $maxthreadStartTime \t $minthreadStartTime";
-		checkmaxminexception($maxthreadStartTime,$minthreadStartTime,'threadStime');
-		
-		print "\n MAX & MIN thread End time  : $maxthreadEndTime \t $minthreadEndTime";
-		checkmaxminexception($maxthreadEndTime,$minthreadEndTime,'threadEtime');
-		
-		# find max and minimum times across both thread start and end times
-		$maxthreadStartTime = ($maxthreadStartTime > $maxthreadEndTime) ? $maxthreadStartTime: $maxthreadEndTime;
-		$maxthreadEndTime = $maxthreadStartTime;
-		
-		$minthreadStartTime = ($minthreadStartTime < $minthreadEndTime) ? $minthreadStartTime: $minthreadEndTime;
-		$minthreadEndTime = $minthreadStartTime;
-		
-		print "\n Fixed: MAX & MIN thread Start time : $maxthreadStartTime \t $minthreadStartTime";
-		print "\n Fixed: MAX & MIN thread End time  : $maxthreadEndTime \t $minthreadEndTime";
-	}
-	
+
 	if($numw){
 		print "MAX & MIN thread lengths: $maxthreadlength \t $minthreadlength\n";
 		checkmaxminexception($maxthreadlength , $minthreadlength, 'number of words');
@@ -1744,21 +777,6 @@ sub generateTrainingFile{
 		checkmaxminexception($maxnumsentences , $minnumsentences, 'number of sentences');
 		checkmaxminexception($maxavgnumsentences , $minavgnumsentences, 'avg number of sentences');
 		checkmaxminexception($maxnumsentences_first , $minnumsentences_first, 'number of sentences first');
-	}
-	
-	if($numq){
-		print "MAX & MIN num questions: $maxquestionmarks \t $minquestionmarks\n";
-		checkmaxminexception($maxquestionmarks , $minquestionmarks, 'number of questions');
-	}
-	
-	if($senti && (keys %multiquestions ne 0) ){
-		print "MAX & MIN num questions: $maxmultiquestionmarks \t $minmultiquestionmarks\n";
-		checkmaxminexception($maxmultiquestionmarks , $minmultiquestionmarks, 'sentiments');
-	}
-	
-	if($numquotes){
-		print "MAX & MIN num quotations: $maxquotationmarks \t $minquotationmarks\n";
-		checkmaxminexception($maxquotationmarks, $minquotationmarks, 'number of quotes');
 	}
 	
 	if($courseref){
@@ -1781,31 +799,13 @@ sub generateTrainingFile{
 		checkmaxminexception($maxnum_urlreffirstpost, $minnum_urlreffirstpost, 'timereffirst');
 	}
 	
-	if($hedging){
-		print "MAX & MIN hedging mentions: $maxhedging \t $minhedging\n";
-		print "MAX & MIN hedging density: $maxhedgingdensity \t $minhedgingdensity\n";
-		checkmaxminexception($maxhedging, $minhedging, 'hedging');
-		checkmaxminexception($maxhedgingdensity, $minhedgingdensity, 'avg hedging');
-	}
-	
 	if($affir){
 		print "MAX & MIN affir mentions: $maxaffir \t $minaffir\n";
 		print "MAX & MIN affir density : $maxaffirdensity \t $minaffirdensity\n";
 		checkmaxminexception($maxaffir, $minaffir, 'affirmations');
 		checkmaxminexception($maxaffirdensity, $minaffirdensity, 'affirmation dentsity');
 	}
-	
-	if($prof){
-		print "MAX & MIN prof mentions: $maxprofmentions \t $minprofmentions\n";
-		print "MAX & MIN prof density: $maxavgprofmentions \t $minavgprofmentions\n";
-		print "MAX & MIN staff mentions: $maxstaffmentions \t $minstaffmentions\n";
-		print "MAX & MIN staff density: $maxavgstaffmentions \t $minavgstaffmentions\n";
-		checkmaxminexception($maxprofmentions, $minprofmentions, 'profmentions');
-		checkmaxminexception($maxavgprofmentions, $minavgprofmentions, 'avgprofmentions');
-		checkmaxminexception($maxstaffmentions, $minstaffmentions, 'staffmentions');
-		checkmaxminexception($maxavgstaffmentions, $minavgstaffmentions, 'staffavgmentions');
-	}
-	
+
 	if($pdtb){
 		print "MAX & MIN pdtb e: $maxpdtbexpansion \t $minpdtbexpansion\n";
 		print "MAX & MIN pdtb c: $maxpdtbcontingency \t $minpdtbcontingency\n";
@@ -1831,22 +831,6 @@ sub generateTrainingFile{
 	# compute tf-IDFs
 	my $termWeights;
 	if($unigrams){
-		if($normalize){
-			my $total_num_courses = scalar (@courses);
-			my $normalisedTermIDFs = averageTermIDF($terms,$total_num_courses);
-		
-			$termWeights = computeTFIDFs(	\%termFrequencies, 
-											$normalisedTermIDFs,	## sends averaged IDF weights
-											$term_course,
-											$num_threads_coursewise,
-											$corpus_type, 
-											$dbh,
-											$tftype,	#uses normalised tf without idf
-											$coursewiseIDF,
-											$normalize
-										);
-		}
-		else{
 			$termWeights = computeTFIDFs(	\%termFrequencies,
 											$terms, 	## sends per course IDF weights 
 											$term_course,
@@ -1854,13 +838,10 @@ sub generateTrainingFile{
 											$corpus_type,
 											$dbh,
 											$tftype,	#uses normalised tf without idf
-											$coursewiseIDF,
-											$normalize
-										);
-		}
-		
+											$coursewiseIDF
+										);	
 		if (keys %{$termWeights} ==0 ){
-			die "\n termweights matrix is empty ";
+			print LOG "\n termweights matrix is empty "; exit(0);
 		}
 	}
 	
@@ -1986,7 +967,8 @@ sub generateTrainingFile{
 			
 				if ( $sum_of_squares == 0 || !defined $sum_of_squares ){
 					print $FEXTRACT "Exception: sum_of_square is undef or zero $threadid \t $courseid \t $label \t $docid";
-					die "Exception: sum_of_square is undef or zero $threadid \t $courseid \t $label \t $docid";
+					print "Exception: sum_of_square is undef or zero $threadid \t $courseid \t $label \t $docid";
+					exit(0);
 				}
 				
 				#lnorm of term vector. Scales to 0 to 1 range. 
@@ -2056,112 +1038,15 @@ sub generateTrainingFile{
 					}
 				}
 			}
-			
-			if($titlewords){
-				$titlewordsth->execute($docid) or die "execute failed titlewordqry";
-				my $title = @{$titlewordsth->fetchrow_arrayref()}[0];				
-				my $titleunigrams		= extractNgrams($title, 1, 0, 1);
-				if(keys %$titleunigrams <= 0) {	
-					$nontermfeaturecount++;
-					$term_vector->{$nontermfeaturecount}	= undef;
-					$nontermfeaturecount++;
-					$term_vector->{$nontermfeaturecount}	= undef;
-				}
-				else{
-					my ($lecture,$otherwords)	= getTitleFeatures($titleunigrams);
-					$nontermfeaturecount++;
-					$term_vector->{$nontermfeaturecount}	= $lecture;
-					$nontermfeaturecount++;
-					$term_vector->{$nontermfeaturecount}	= $otherwords;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'title_words';
-			}
-			
+				
 			if($tlength){
 				$nontermfeaturecount++;
 				$term_vector->{$nontermfeaturecount}	= $numposts{$docid};
 				$nontermfeatures{$nontermfeaturecount}	= 'tlen:#posts+#comments';
 			}
-			
-			if($forumid){
-				$nontermfeaturecount++;
-				#$term_vector->{$nontermfeaturecount}	= $forumid_number;
-				$nontermfeatures{$nontermfeaturecount}	= 'forumid';
-				foreach my $code (%forumid_vector){
-					$nontermfeaturecount++;
-					$term_vector->{$nontermfeaturecount} = ($code == $forumid_number)? 1: 0;
-				}
-			}
-			
-			if($threadtime){
-				$nontermfeaturecount++;
-				if (defined $threadStartTime{$docid}){
-					my $normalised = $threadStartTime{$docid};
-					if(($maxthreadStartTime - $minthreadStartTime) != 0){
-						$normalised = ($threadStartTime{$docid} - $minthreadStartTime)/ 
-										($maxthreadStartTime - $minthreadStartTime);
-					}
-					$term_vector->{$nontermfeaturecount}	= $normalised;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'thread_stime';
-				
-				$nontermfeaturecount++;
-				if (defined $threadEndTime{$docid}){
-					my $normalised	= $threadEndTime{$docid};
-					if(($maxthreadStartTime - $minthreadStartTime) != 0){
-						$normalised = ($threadEndTime{$docid} - $minthreadEndTime)/ 
-										($maxthreadEndTime - $minthreadEndTime);
-					}
-					$term_vector->{$nontermfeaturecount}	= $normalised;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'thread_etime';
-			}
-			
-			if($userfeatures){
-				my $isOPanaon = isThreadOPAnon($dbh,$docid);
-				$nontermfeaturecount++;
-				if(defined $isOPanaon){
-					$term_vector->{$nontermfeaturecount}	= $isOPanaon;
-				}else{
-					$term_vector->{$nontermfeaturecount}	= undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'user_anaon';
-			}
-			
-			if($solvedness){
-				my $approved = isThreadApproved($dbh,$docid);
-				my $resolved = isThreadResolved($dbh,$docid);
-				my $deleted  = isThreadDeleted($dbh,$docid);
-				$nontermfeaturecount++;
-				if(defined $approved){
-					$term_vector->{$nontermfeaturecount}	= $approved;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	=  undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'approved';
-				
-				$nontermfeaturecount++;
-				if(defined $resolved){
-					$term_vector->{$nontermfeaturecount}	= $resolved;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	=  undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'resolved';
-				
-				$nontermfeaturecount++;
-				if(defined $deleted){
-					$term_vector->{$nontermfeaturecount}	= $deleted;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	=  undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'deleted';
-			}
-			
+
 			if($forumtype){
-				#print "\nadding forumtype feature.";
+				#print $log "\n adding forumtype feature.";
 				my @forumtype_vector = @{encodeforumname($forumname)};
 				foreach my $code (@forumtype_vector){
 					$nontermfeaturecount++;
@@ -2175,71 +1060,6 @@ sub generateTrainingFile{
 				}
 			}
 
-			if($assessmentwc){
-				$nontermfeaturecount++;
-				if(defined $assessmentwords{$docid}){
-					my $normalised = $assessmentwords{$docid};
-					if(($maxassessmentwords - $minassessmentwords) != 0){
-						$normalised = ($assessmentwords{$docid} - $minassessmentwords) / 
-											($maxassessmentwords - $minassessmentwords);
-					}
-					$term_vector->{$nontermfeaturecount}	= $normalised;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	= undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'wc_asses';
-			}
-			
-			if($problemwc){
-				$nontermfeaturecount++;
-				if(defined $problemwords{$docid}){
-					my $normalised = $problemwords{$docid};
-					if(($maxproblemwords - $minproblemwords) != 0){
-						$normalised = ($problemwords{$docid} - $minproblemwords) / 
-												($maxproblemwords	- $minproblemwords);
-					}
-					$term_vector->{$nontermfeaturecount}	= $normalised;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	= undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'wc_problem';
-			}
-			
-			if($conclusionwc){
-				$nontermfeaturecount++;
-				if(defined $conclusionwords{$docid}){
-					my $normalised = $conclusionwords{$docid};
-					if(($maxconclusionwords - $minconclusionwords) != 0){
-						$normalised = ($conclusionwords{$docid} - $minconclusionwords) /
-											($maxconclusionwords - $minconclusionwords);
-					}
-					$term_vector->{$nontermfeaturecount}	= $normalised;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	= undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'wc_conc';
-
-			}
-			
-			if($requestwc){
-				$nontermfeaturecount++;
-				if(defined $requestwords{$docid}){
-					my $normalised = $requestwords{$docid};
-					if(($maxrequestwords - $minrequestwords) != 0){
-						$normalised = ($requestwords{$docid} - $minrequestwords) /
-												($maxrequestwords - $minrequestwords);
-					}
-					$term_vector->{$nontermfeaturecount}	= $normalised;
-				}
-				else{
-					$term_vector->{$nontermfeaturecount}	= undef;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'wc_request';
-			}
-			
 			if($numw){
 				#print "\nadding num_words feature.";
 				$nontermfeaturecount++;
@@ -2255,466 +1075,188 @@ sub generateTrainingFile{
 			}
 			
 			if($numsentences){
-				#print "\n Adding num_sentences feature";
-				if($normalize){
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences';
-					if(defined $numsentences{$docid}){
-						$term_vector->{$nontermfeaturecount} = 
-											  maxminNorm(
-															$numsentences{$docid}, 
-															$maxnumsentences{$courseid}, 
-															$minnumsentences{$courseid}
-														);
+				#print $log "\n Adding num_sentences feature";
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences';
+				if(defined $numsentences{$docid}){				
+					my $normalised = $maxnumsentences ;
+					if(($maxnumsentences - $minnumsentences) != 0){
+						$normalised = ($numsentences{$docid} - $minnumsentences)/($maxnumsentences - $minnumsentences);
 					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'numw:avg. # sentences per post';
-					if(defined $avgnumsentences{$docid}){
-						$term_vector->{$nontermfeaturecount} = 
-												maxminNorm(
-															$avgnumsentences{$docid}, 
-															$maxavgnumsentences{$courseid}, 
-															$minavgnumsentences{$courseid}
-														  );
+					$term_vector->{$nontermfeaturecount} = $normalised;
+				}
+				
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'numw:avg. # sentences per post';
+				if(defined $avgnumsentences{$docid}){
+					my $normalised = $maxavgnumsentences;
+					if (($maxavgnumsentences - $minavgnumsentences) != 0){
+						$normalised = ($avgnumsentences{$docid} - $minavgnumsentences)/ ($maxavgnumsentences - $minavgnumsentences);
 					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences in 1st post';
-					if(defined $numsentences_first{$docid}){
-						$term_vector->{$nontermfeaturecount} = 
-												maxminNorm(
-															$numsentences_first{$docid}, 
-															$maxnumsentences_first{$courseid}, 
-															$minnumsentences_first{$courseid}
-														  );
+					$term_vector->{$nontermfeaturecount} = $normalised;
+				}
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences in 1st post';
+				if(defined $numsentences_first{$docid}){
+					my $normalised = $maxnumsentences_first;
+					if (($maxnumsentences_first - $minnumsentences_first) != 0){
+						$normalised = ($numsentences_first{$docid} - $minnumsentences_first)/ ($maxnumsentences_first - $minnumsentences_first);
 					}
+					$term_vector->{$nontermfeaturecount} = $normalised;
+				}
+			}
+	
+			if($courseref){
+				#print $log "\n adding courseref mention feature";
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'courseref_all';
+				if(defined $coursematerialterms{$docid}){
+					my $normalised = ($coursematerialterms{$docid} - $mincoursematerail)/ ($maxcoursematerail - $mincoursematerail);
+					$term_vector->{$nontermfeaturecount} = $normalised;
+					$nontermfeaturecount++;
+					$normalised = ($coursematerialtermdensity{$docid} - $mincoursemateraildensity)/ ($maxcoursemateraildensity - $mincoursemateraildensity);
+					$term_vector->{$nontermfeaturecount} = $normalised;
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity';
 				}
 				else{
 					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences';
-					if(defined $numsentences{$docid}){				
-						my $normalised = $maxnumsentences ;
-						if(($maxnumsentences - $minnumsentences) != 0){
-							$normalised = ($numsentences{$docid} - $minnumsentences)/($maxnumsentences - $minnumsentences);
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
-					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'numw:avg. # sentences per post';
-					if(defined $avgnumsentences{$docid}){
-						my $normalised = $maxavgnumsentences;
-						if (($maxavgnumsentences - $minavgnumsentences) != 0){
-							$normalised = ($avgnumsentences{$docid} - $minavgnumsentences)/ ($maxavgnumsentences - $minavgnumsentences);
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
-					}
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences in 1st post';
-					if(defined $numsentences_first{$docid}){
-						my $normalised = $maxnumsentences_first;
-						if (($maxnumsentences_first - $minnumsentences_first) != 0){
-							$normalised = ($numsentences_first{$docid} - $minnumsentences_first)/ ($maxnumsentences_first - $minnumsentences_first);
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
-					}
-				}
-			}
-			
-			if($posttime){
-				#print "\n adding posttime feature";
-				$nontermfeaturecount++;
-				if(defined $meanposttimediff{$docid}){
-					my $normalised_timediff = ($meanposttimediff{$docid} - $mintimediff)/ ($maxtimediff - $mintimediff);
-					$term_vector->{$nontermfeaturecount} = $normalised_timediff;
-				}
-				$nontermfeatures{$nontermfeaturecount}	= 'time_diffs';
-			}
-
-			if($question){
-				print "\n adding question feature";
-				$nontermfeaturecount++;
-				$term_vector->{$nontermfeaturecount} = $isfirstpostquestion;
-				$nontermfeatures{$nontermfeaturecount} = 'ques: 1st post question';
-			}
-			
-			if($numq){
-				print "\n adding num questions feature";
-				$nontermfeaturecount++;
-				$nontermfeatures{$nontermfeaturecount} = 'ques:# questions';
-				if(defined $numquestions{$docid}){
-					my $normalised = ($numquestions{$docid} - $minquestionmarks)/ ($maxquestionmarks - $minquestionmarks);
-					$term_vector->{$nontermfeaturecount} = $normalised;
-				}
-			}
-			
-			if($senti){
-				print "\n adding sentiment feature";
-				$nontermfeaturecount++;
-				$nontermfeatures{$nontermfeaturecount} = 'senti: #succesive ? or letters ';
-				my $max_minus_min = ($maxmultiquestionmarks - $minmultiquestionmarks);
-				if(defined $multiquestions{$docid} && $max_minus_min ne 0){
-					my $normalised = ($multiquestions{$docid} - $minmultiquestionmarks)/$max_minus_min;
-					$term_vector->{$nontermfeaturecount} = $normalised;
-				}
-			}
-			
-			if($numquotes){
-				#print "\n adding num quotes feature";
-				$nontermfeaturecount++;
-				$nontermfeatures{$nontermfeaturecount} = 'quotes:# quotes';
-				if(defined $numquotes{$docid}){
-					my $normalised = ($numquotes{$docid} - $minquotationmarks)/ ($maxquotationmarks - $minquotationmarks);
-					$term_vector->{$nontermfeaturecount} = $normalised;
-				}
-			}
-			
-			if($prof){
-				#print "\n adding prof mention feature";
-				$nontermfeaturecount++;
-				$nontermfeatures{$nontermfeaturecount} = 'profmention';
-				if(defined $profmention{$docid}){
-					my $normalised = ($profmention{$docid} - $minprofmentions)/ ($maxprofmentions-$minprofmentions);
-					$term_vector->{$nontermfeaturecount} = $normalised;
-					$nontermfeaturecount++;
-				
-					$normalised = ($profmentiondensity{$docid} - $minavgprofmentions)/ ($maxavgprofmentions-$minavgprofmentions);
-					$term_vector->{$nontermfeaturecount} = $normalised;
-					$nontermfeatures{$nontermfeaturecount} = 'profmentiondensity';
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity';
 				}
 				
 				$nontermfeaturecount++;
-				$nontermfeatures{$nontermfeaturecount} = 'staffmention';
-				if(defined $staffmention{$docid}){
-					my $normalised = ($staffmention{$docid} - $minstaffmentions)/ ($maxstaffmentions-$minstaffmentions);
+				$nontermfeatures{$nontermfeaturecount} = 'courseref_nkd';
+				if(defined $coursematerialterms_nkd{$docid}){
+					my $normalised = ($coursematerialterms_nkd{$docid} - $mincoursematerail_nkd)/ 
+													($maxcoursematerail_nkd - $mincoursematerail_nkd);
 					$term_vector->{$nontermfeaturecount} = $normalised;
 					$nontermfeaturecount++;
+					$normalised = ($coursematerialtermdensity_nkd{$docid} - $mincoursemateraildensity_nkd)/($maxcoursemateraildensity_nkd - $mincoursemateraildensity_nkd);
+					$term_vector->{$nontermfeaturecount} = $normalised;
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_nkd';
+				}
+				else{
+					$nontermfeaturecount++;
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_nkd';
+				}
 				
-					$normalised = ($staffmentiondensity{$docid} - $minavgstaffmentions)/ ($maxavgstaffmentions-$minavgstaffmentions);
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'courseref_pfx';
+				if(defined $coursematerialterms_pfx{$docid}){
+					my $normalised = ($coursematerialterms_pfx{$docid} - $mincoursematerail_pfx)/ ($maxcoursematerail_pfx - $mincoursematerail_pfx);
 					$term_vector->{$nontermfeaturecount} = $normalised;
-					$nontermfeatures{$nontermfeaturecount} = 'staffmentiondensity';
+					$nontermfeaturecount++;
+					$normalised = ($coursematerialtermdensity_pfx{$docid} - $mincoursemateraildensity_pfx)/ ($maxcoursemateraildensity_pfx - $mincoursemateraildensity_pfx);
+					$term_vector->{$nontermfeaturecount} = $normalised;
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_pfx';
 				}
-			}
-			
-			if($courseref){
-				#print "\n adding courseref mention feature";
-				if ($normalize){
+				else{
 					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_all';
-					if(defined $coursematerialterms{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialterms{$docid}, 
-																			$maxcoursematerail{$courseid}, 
-																			$mincoursematerail{$courseid}
-																		 );
-						
-						$nontermfeaturecount++;
-
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialtermdensity{$docid}, 
-																			$maxcoursemateraildensity{$courseid}, 
-																			$mincoursemateraildensity{$courseid}
-																		 );
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity';
-					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_nkd';
-					if(defined $coursematerialterms_nkd{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialterms_nkd{$docid}, 
-																			$maxcoursematerail_nkd{$courseid}, 
-																			$mincoursematerail_nkd{$courseid}
-																		 );
-						$nontermfeaturecount++;
-						
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialtermdensity_nkd{$docid},
-																			$maxcoursemateraildensity_nkd{$courseid}, 
-																			$mincoursemateraildensity_nkd{$courseid}
-																		 );
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_nkd';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_nkd';
-					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_pfx';
-					if(defined $coursematerialterms_pfx{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialterms_pfx{$docid},
-																			$maxcoursematerail_pfx{$courseid},
-																			$mincoursematerail_pfx{$courseid}
-																		 );						
-						
-						$nontermfeaturecount++;
-
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialtermdensity_pfx{$docid},
-																			$maxcoursemateraildensity_pfx{$courseid},
-																			$mincoursemateraildensity_pfx{$courseid}
-																		 );
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_pfx';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_pfx';
-					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_sfx';
-					if(defined $coursematerialterms_sfx{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialterms_sfx{$docid},
-																			$maxcoursematerail_sfx{$courseid},
-																			$mincoursematerail_sfx{$courseid}
-																		 );
-						$nontermfeaturecount++;
-						
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$coursematerialtermdensity_sfx{$docid},
-																			$maxcoursemateraildensity_sfx{$courseid},
-																			$mincoursemateraildensity_sfx{$courseid}
-																		 );
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_sfx';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_sfx';
-					}
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_pfx';
 				}
-				else {
+				
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'courseref_sfx';
+				if(defined $coursematerialterms{$docid}){
+					my $normalised = ($coursematerialterms_sfx{$docid} - $mincoursematerail_sfx)/ ($maxcoursematerail_sfx - $mincoursematerail_sfx);
+					$term_vector->{$nontermfeaturecount} = $normalised;
 					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_all';
-					if(defined $coursematerialterms{$docid}){
-						my $normalised = ($coursematerialterms{$docid} - $mincoursematerail)/ ($maxcoursematerail - $mincoursematerail);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeaturecount++;
-						$normalised = ($coursematerialtermdensity{$docid} - $mincoursemateraildensity)/ ($maxcoursemateraildensity - $mincoursemateraildensity);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity';
-					}
-					
+					$normalised = ($coursematerialtermdensity_sfx{$docid} - $mincoursemateraildensity_sfx)/ ($maxcoursemateraildensity_sfx - $mincoursemateraildensity_sfx);
+					$term_vector->{$nontermfeaturecount} = $normalised;
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_sfx';
+				}
+				else{
 					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_nkd';
-					if(defined $coursematerialterms_nkd{$docid}){
-						my $normalised = ($coursematerialterms_nkd{$docid} - $mincoursematerail_nkd)/ 
-														($maxcoursematerail_nkd - $mincoursematerail_nkd);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeaturecount++;
-						$normalised = ($coursematerialtermdensity_nkd{$docid} - $mincoursemateraildensity_nkd)/($maxcoursemateraildensity_nkd - $mincoursemateraildensity_nkd);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_nkd';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_nkd';
-					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_pfx';
-					if(defined $coursematerialterms_pfx{$docid}){
-						my $normalised = ($coursematerialterms_pfx{$docid} - $mincoursematerail_pfx)/ ($maxcoursematerail_pfx - $mincoursematerail_pfx);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeaturecount++;
-						$normalised = ($coursematerialtermdensity_pfx{$docid} - $mincoursemateraildensity_pfx)/ ($maxcoursemateraildensity_pfx - $mincoursemateraildensity_pfx);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_pfx';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_pfx';
-					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'courseref_sfx';
-					if(defined $coursematerialterms{$docid}){
-						my $normalised = ($coursematerialterms_sfx{$docid} - $mincoursematerail_sfx)/ ($maxcoursematerail_sfx - $mincoursematerail_sfx);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeaturecount++;
-						$normalised = ($coursematerialtermdensity_sfx{$docid} - $mincoursemateraildensity_sfx)/ ($maxcoursemateraildensity_sfx - $mincoursemateraildensity_sfx);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_sfx';
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_sfx';
-					}
+					$nontermfeatures{$nontermfeaturecount} = 'courserefdensity_sfx';
 				}
 			}
 			
 			if($nonterm_courseref){
-				#print "\n adding nonterm_courseref mention feature";
-				if($normalize){
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'urlref';
-					if(defined $num_urlref{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$num_urlref{$docid},
-																			$maxnum_urlref{$courseid},
-																			$minnum_urlref{$courseid}
-																		 );
-					}				
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'timeref';				
-					if(defined $num_timeref{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$num_timeref{$docid},
-																			$maxnum_timeref{$courseid},
-																			$minnum_timeref{$courseid}
-																		 );
+				#print $log "\n adding nonterm_courseref mention feature";
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'urlref';
+				if(defined $num_urlref{$docid}){
+					my $normalised = ($num_urlref{$docid} - $minnum_urlref) / ($maxnum_urlref - $minnum_urlref);
+					$term_vector->{$nontermfeaturecount} = $normalised;
+				}				
+				
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'timeref';				
+				if(defined $num_timeref{$docid}){
+					my $denom = $maxnum_timeref - $minnum_timeref;
+					my $normalised;
+					if ($denom != 0){
+						$normalised = ($num_timeref{$docid} - $minnum_timeref) / $denom;
 					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'urlreffirstpost';
-					if(defined $num_urlrefinfirstpost{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$num_urlrefinfirstpost{$docid},
-																			$maxnum_urlreffirstpost{$courseid},
-																			$minnum_urlreffirstpost{$courseid} 
-																		 );
+					else{
+						$normalised = $num_timeref{$docid};
 					}
-
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'timereffirstpost';
-					if(defined $num_timereffirstpost{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$num_timereffirstpost{$docid}, 
-																			$maxnum_timereffirstpost{$courseid},
-																			$minnum_timereffirstpost{$courseid}
-																		 );
-					}
-
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'equation';				
-					if(defined $hasEquation{$docid}){					
-						$term_vector->{$nontermfeaturecount} = $hasEquation{$docid};
-					}
+					$term_vector->{$nontermfeaturecount} = $normalised;
 				}
-				else{
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'urlref';
-					if(defined $num_urlref{$docid}){
-						my $normalised = ($num_urlref{$docid} - $minnum_urlref) / ($maxnum_urlref - $minnum_urlref);
-						$term_vector->{$nontermfeaturecount} = $normalised;
-					}				
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'timeref';				
-					if(defined $num_timeref{$docid}){
-						my $denom = $maxnum_timeref - $minnum_timeref;
-						my $normalised;
-						if ($denom != 0){
-							$normalised = ($num_timeref{$docid} - $minnum_timeref) / $denom;
-						}
-						else{
-							$normalised = $num_timeref{$docid};
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
+				
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'urlreffirstpost';
+				if(defined $num_urlrefinfirstpost{$docid}){
+					my $denom = $maxnum_urlreffirstpost - $minnum_urlreffirstpost;
+					my $normalised;
+					if ($denom != 0){
+						$normalised = ($num_urlrefinfirstpost{$docid} - $minnum_urlreffirstpost) / $denom;
 					}
-					
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'urlreffirstpost';
-					if(defined $num_urlrefinfirstpost{$docid}){
-						my $denom = $maxnum_urlreffirstpost - $minnum_urlreffirstpost;
-						my $normalised;
-						if ($denom != 0){
-							$normalised = ($num_urlrefinfirstpost{$docid} - $minnum_urlreffirstpost) / $denom;
-						}
-						else{
-							$normalised = $num_urlrefinfirstpost{$docid};
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
+					else{
+						$normalised = $num_urlrefinfirstpost{$docid};
 					}
+					$term_vector->{$nontermfeaturecount} = $normalised;
+				}
 
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'timereffirstpost';
-					if(defined $num_timereffirstpost{$docid}){
-						my $normalised;
-						my $denom = ($maxnum_timereffirstpost - $minnum_timereffirstpost);
-						if ($denom > 0 ){
-							$normalised = ($num_timereffirstpost{$docid} - $minnum_timereffirstpost) / $denom;
-						}
-						else{
-							$normalised = $num_timereffirstpost{$docid};
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'timereffirstpost';
+				if(defined $num_timereffirstpost{$docid}){
+					my $normalised;
+					my $denom = ($maxnum_timereffirstpost - $minnum_timereffirstpost);
+					if ($denom > 0 ){
+						$normalised = ($num_timereffirstpost{$docid} - $minnum_timereffirstpost) / $denom;
 					}
+					else{
+						$normalised = $num_timereffirstpost{$docid};
+					}
+					$term_vector->{$nontermfeaturecount} = $normalised;
+				}
 
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'equation';				
-					if(defined $hasEquation{$docid}){					
-						$term_vector->{$nontermfeaturecount} = $hasEquation{$docid};
-					}
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = 'equation';				
+				if(defined $hasEquation{$docid}){					
+					$term_vector->{$nontermfeaturecount} = $hasEquation{$docid};
 				}
 			}
 						
 			if($affir){
-				#print "\n adding affir mention feature";
-				if($normalize){
+				#print $log "\n adding affir mention feature";
+				$nontermfeaturecount++;
+				$nontermfeatures{$nontermfeaturecount} = '#affirmations';
+				if(defined $affirmations{$docid}){
+					my $normalised = $maxaffir;
+					if(($maxaffir - $minaffir) != 0){
+						$normalised = ($affirmations{$docid} - $minaffir)/ ($maxaffir - $minaffir);
+					}
+					$term_vector->{$nontermfeaturecount} = $normalised;
+					
 					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = '#affirmations';
-					if(defined $affirmations{$docid}){
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$affirmations{$docid},
-																			$maxaffir{$courseid},
-																			$minaffir{$courseid}
-																		 );						
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'affirmations density';
-
-						$term_vector->{$nontermfeaturecount} = maxminNorm(
-																			$affirtermdensity{$docid},
-																			$maxaffirdensity{$courseid},
-																			$minaffirdensity{$courseid}
-																		 );
+					$nontermfeatures{$nontermfeaturecount} = 'affirmations density';
+					$normalised = $maxaffirdensity;
+					if(($maxaffirdensity - $minaffirdensity) != 0){
+						$normalised =($affirtermdensity{$docid} - $minaffirdensity)/ ($maxaffirdensity - $minaffirdensity);
 					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'affirmations density';
-					}
+					$term_vector->{$nontermfeaturecount} = $normalised;
 				}
 				else{
 					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = '#affirmations';
-					if(defined $affirmations{$docid}){
-						my $normalised = $maxaffir;
-						if(($maxaffir - $minaffir) != 0){
-							$normalised = ($affirmations{$docid} - $minaffir)/ ($maxaffir - $minaffir);
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
-						
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'affirmations density';
-						$normalised = $maxaffirdensity;
-						if(($maxaffirdensity - $minaffirdensity) != 0){
-							$normalised =($affirtermdensity{$docid} - $minaffirdensity)/ ($maxaffirdensity - $minaffirdensity);
-						}
-						$term_vector->{$nontermfeaturecount} = $normalised;
-					}
-					else{
-						$nontermfeaturecount++;
-						$nontermfeatures{$nontermfeaturecount} = 'affirmations density';
-					}
+					$nontermfeatures{$nontermfeaturecount} = 'affirmations density';
 				}
 			}
 			
 			if($agree){
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = '#agreedisagree';
-				if(defined $agreedisagree{$docid}){					
+				if(defined $agreedisagree{$docid}){			
 					my $normalised = $maxagreedisagree;
 					if(($maxagreedisagree - $minagreedisagree) != 0){
 						$normalised = ($agreedisagree{$docid} - $minagreedisagree)/ ($maxagreedisagree - $minagreedisagree);
@@ -2734,27 +1276,7 @@ sub generateTrainingFile{
 					$nontermfeatures{$nontermfeaturecount} = '#agreedisagree density';
 				}
 			}
-			
-			if($hedging){
-				$nontermfeaturecount++;
-				$nontermfeatures{$nontermfeaturecount} = '#hedging';
-				if(defined $hedgeterm{$docid}){
-					my $normalised = ($hedgeterm{$docid} - $minhedging) / ($maxhedging - $minhedging);
-					$term_vector->{$nontermfeaturecount} = $normalised;
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'hedgingdensity';
-					$normalised = ($hedgetermdensity{$docid} - $minhedgingdensity)/ ($maxhedgingdensity - $minhedgingdensity);
-					$term_vector->{$nontermfeaturecount} = $normalised;				
-				}
-				else{
-					$nontermfeaturecount++;
-					$nontermfeatures{$nontermfeaturecount} = 'hedgingdensity';
-				}
-			}
-			
-			# if($votes){
-				# $votes->{$courseid}{$forumid}{$threadid}{$postid}
-			# }
+
 			#record the term vector for this thread
 			$termvectors_collated{$docid} = [$serialid, $label, $forumname, $term_vector];
 		}
@@ -2762,7 +1284,7 @@ sub generateTrainingFile{
 	}
 	
 	# print all features for this thread to file
-	my $thread_couter = 0; my $inter_thread_couter	= 	0;
+	my $inter_thread_couter	= 	0;
 	
 	foreach my $docid ( sort {$a<=>$b} keys %termvectors_collated){
 		my @thread 		= @{$termvectors_collated{$docid}};
@@ -2770,60 +1292,14 @@ sub generateTrainingFile{
 		my $label 		= $thread[1];
 		my $forumname	= $thread[2];
 		my $term_vector = $thread[3];
-		my @actions		= (1,2,3,4);
-		
-		$thread_couter++;
-		if ($print_format eq 'vw'){
-			
-			if($label eq '-1')	{	next;	}
-			
-			my $probability_of_intervention		= sprintf ("%.3f",(1/4));
-			my $current_action_cost	= 	($label eq '+1')? 0 : 1;
-			
-			my $current_action		= 	($forumname eq 'Errata')? 1 :(
-											($forumname eq 'Exam')? 2:(
-												($forumname eq 'Lecture')? 3 :(
-													($forumname eq 'Homework')? 4 :'Excepetion-- $forumname')));
-											
-			print $FH "$current_action\:$current_action_cost\:$probability_of_intervention";
-			foreach my $action (@actions){
-				if($action == $current_action){
-					next;
-				}
-				print $FH "$action\:1\:$probability_of_intervention";
-			}
-				print $FH " |";
-				
-			#print features
-			foreach my $tid (sort { $a <=> $b } (keys %$term_vector)){
-				#printf $FH "$terms->{$tid}{'term'}:%.3f ",$term_vector->{$tid};
-				printf $FH "$tid:%.3f ",$term_vector->{$tid};
-			}
-		}
-		elsif ($print_format eq 'oaa'){
-			#if($label eq '-1')	{	next;	}
-			my $current_action		= 	($forumname eq 'Errata')? 1 :(
-											($forumname eq 'Exam')? 2:(
-												($forumname eq 'Lecture')? 3 :(
-													($forumname eq 'Homework')? 4 :'Excepetion-- $forumname')));
-			print $FH "$current_action";
-			print $FH " |";
-				
-			#print features
-			foreach my $tid (sort { $a <=> $b } (keys %$term_vector)){
-				#printf $FH "$terms->{$tid}{'term'}:%.3f ",$term_vector->{$tid};
-				printf $FH "$tid:%.3f ",$term_vector->{$tid};
-			}
 
+		print $FH "$docid\t $label\t";
+		foreach my $tid (sort { $a <=> $b } (keys %$term_vector)){
+			if(!defined $term_vector->{$tid}){	next;	}
+			printf $FH  "$tid:%.3f\t",$term_vector->{$tid};
 		}
-		else{
-			print $FH "$docid\t $label\t";
-			foreach my $tid (sort { $a <=> $b } (keys %$term_vector)){
-				if(!defined $term_vector->{$tid}){	next;	}
-				printf $FH  "$tid:%.3f\t",$term_vector->{$tid};
-			}
-		}
-		 if( $label eq '+1' ){	$inter_thread_couter++;	}
+			
+		if( $label eq '+1' ){	$inter_thread_couter++;	}
 		print $FH "\n";
 	}
 	
@@ -2931,54 +1407,6 @@ sub getRequestWordCount{
 	return $count;
 }
 
-sub getThreadEtime{
-	my ($dbh,$threadid, $courseid,$label) = @_;
-	
-	my $posttable = 'post'; 
-	my $cmnttable = 'comment';
-	
-	if ($label eq '+1'){
-		$posttable = 'post2';
-		$cmnttable = 'comment2';
-	}
-	my $lastposttime = @{$dbh->selectcol_arrayref("select post_time from $posttable where thread_id = $threadid and courseid = \'$courseid\'  order by post_time desc limit 1")}[0];
-	my $lastcmnttime = @{$dbh->selectcol_arrayref("select post_time from $cmnttable where thread_id = $threadid and courseid = \'$courseid\'  order by post_time desc limit 1")}[0];
-	if(!defined $lastcmnttime){ $lastcmnttime = 0;}
-	
-	if(!defined $lastposttime && $label eq '+1'){
-		print "\nWarning: No thread-END-time for $threadid \t $courseid \t in $posttable";
-		return 0;
-	}
-	if(!defined $lastposttime && $label eq '-1'){ 
-		print "\nException: No thread-end-time for $threadid \t $courseid \t in $posttable";
-		exit(0);
-	}
-	#elsif(!defined $lastposttime && !defined $lastcmnttime){return 0;}
-	my $time = ($lastposttime > $lastcmnttime)? $lastposttime :$lastcmnttime;
-	return $time;
-}
-
-sub getThreadStime{
-	my ($dbh,$threadid, $courseid,$label) = @_;
-	my $posttable = 'post'; ;
-	
-	if ($label eq '+1'){
-		$posttable = 'post2';
-	}	
-	my $time = @{$dbh->selectcol_arrayref("select post_time from $posttable where thread_id = $threadid and courseid = \'$courseid\' and original =1")}[0];
-	
-	if(!defined $time && $label eq '+1'){
-		print "\nWarning: No thread-START-time for $threadid \t $courseid \t in $posttable";
-		return 0;
-	}
-	elsif(!defined $time && $label eq '-1'){
-		print "\nException: No thread-start-time for $threadid \t $courseid \t in $posttable";
-		exit(0);
-	}
-	
-	return $time;
-}
-
 sub getConclusionWordCount{
 	my ($text) = @_;
 	
@@ -3024,7 +1452,7 @@ sub averageTermIDF{
 }
 
 sub computeTFIDFs{
-	my ($termFrequencies, $termIDFs, $term_course, $num_threads, $corpus_type, $dbh, $tftype, $coursewiseIDF, $normlize) = @_;
+	my ($termFrequencies, $termIDFs, $term_course, $num_threads, $corpus_type, $dbh, $tftype, $coursewiseIDF) = @_;
 	
 	if(!defined $termIDFs || keys %$termIDFs eq 0){
 		print "\n computeTFIDFs: IDFs not defined. Check IDF table and retrieval steps ";
@@ -3038,8 +1466,6 @@ sub computeTFIDFs{
 	
 	my $max_tfs; #hashref
 	my %termWeights = ();
-	my $tot_num_threads = 0;
-	my $tot_num_courses = 0;
 	my $maxtf_thread; # hashref
 	
 	my $puretf	= 0;
@@ -3064,23 +1490,19 @@ sub computeTFIDFs{
 		$maxtf_thread = getMaxThreadTF($termFrequencies);
 	}
 	
-	if ( $normlize ){	
-		my @courses = keys %$termFrequencies;
-		$max_tfs = getMaxTfs($dbh, \@courses);
-	}
-	
-	if ( !$normlize ){	
-		$tot_num_courses = keys %$termFrequencies;
-		foreach my $courseid ( keys %$termFrequencies ){
-			$tot_num_threads += keys %{$termFrequencies->{$courseid}};
-		}
+	#calculate total number of threads across all courses
+	my $tot_num_threads = 0;
+	my $tot_num_courses = 0;
+	$tot_num_courses = keys %$termFrequencies;
+	foreach my $courseid ( keys %$termFrequencies ){
+		$tot_num_threads += keys %{$termFrequencies->{$courseid}};
 	}
 	
 	foreach my $courseid ( keys %$termFrequencies ){
 		foreach my $threadid ( keys $termFrequencies->{$courseid} ){
 			my $maxtf_this_thread = $maxtf_thread->{$courseid}{$threadid};
 			if(keys $termFrequencies->{$courseid}{$threadid} == 0){
-				print "\nNo terms found for $courseid \t $threadid";
+				print "\n No terms found for $courseid \t $threadid";
 			}
 			foreach my $termid ( keys $termFrequencies->{$courseid}{$threadid} ){
 				###tf
@@ -3092,110 +1514,48 @@ sub computeTFIDFs{
 					$tf = $puretf_param +  ( (1-$puretf_param) * ($tf / $maxtf_this_thread) )
 				}elsif( $logtf){
 					$tf = 1 +  log($tf)/log(10);
-				}elsif ( $normlize ){
-					$tf = $tf / $max_tfs->{$courseid}{$termid};
 				}
 				
 				###idf
-				if ($normlize){
-					my $idf = $termIDFs->{$courseid}{$termid};
-					if (!defined $idf){
-						die "\n computeTFIDFs: Exception: idf not read. $courseid. $normlize ";
-					}
-					$idf = sprintf("%.3f", $idf);
-					###tf.idf				
-					if ( $puretf || $logtf || $booltf){
-						$termWeights{$courseid}{$threadid}{$termid}	= $tf;
-					}
-					else{
-						my $termweight = $tf * $idf;
-						$termWeights{$courseid}{$threadid}{$termid}	= $termweight;
-					}
+				my $df		= $termIDFs->{$termid}{'sumdf'};
+				my $term	= $termIDFs->{$termid}{'term'};
+				my $num_courses_term = keys %{$term_course->{$termid}};
+				my $course_spread_factor = ($num_courses_term / $tot_num_courses);
+				my $idf = 0;
+				
+				if (!defined $term){
+					print "\n computeTFIDFs: Exception: $termid \t $term not found in TF table ";
+					exit(0);
 				}
-				elsif($coursewiseIDF){
-					print "\n doing cswise IDF\n"; exit(0);
-					foreach my $term (keys %{$termIDFs->{$courseid}{$termid}}){
-						my $idf = 0;
-						my $df = $termIDFs->{$courseid}{$termid}{$term};
-						my $num_threads = keys %{$termFrequencies->{$courseid}};
-						my $num_courses_term = keys %{$term_course->{$termid}};
-						if ($df == 0){	$idf = 0;	}
-						else {	
-							my $course_spread_factor = $alpha * ($num_courses_term / $tot_num_courses);
-							if ($alpha == 0){
-								$idf =  ($num_threads/$df);
-								#$idf =  log($num_threads/$df)/log(10);
-							}
-							#elsif ($alpha == 1){
-								# $idf =  $course_spread_factor;
-							#}
-							else{
-								$idf =  ($num_threads/$df) * $course_spread_factor;
-							}
-						}
-						
-						###round off idf score to 3 decimal places
-						$idf = sprintf("%.3f", $idf);
-						###tf.idf				
-						if ( $puretf || $logtf || $booltf){
-							$termWeights{$courseid}{$threadid}{$termid}	= $tf;
-						}
-						else{
-							my $termweight = $tf * $idf;
-							$termWeights{$courseid}{$threadid}{$termid}	= $termweight;
-						}
-					}
+				if (!defined $df){
+					print "\n computeTFIDFs: Exception: idf not read. $termid \t $term \t $courseid \t $normlize ";
+					exit(0);
+				}
+
+				if (!defined $num_threads){
+					die "\n computeTFIDFs: Exception: num_threads not read. $courseid. $normlize. ";
+				}
+				
+				if ($df == 0){	$idf = 0;	}
+				elsif($tot_num_threads==0 || $course_spread_factor ==0){
+					print "\n Zero exception:  \t $course_spread_factor \t $num_courses_term";
 				}
 				else{
-					my $df = $termIDFs->{$termid}{'sumdf'};
-					my $term = $termIDFs->{$termid}{'term'};
-					my $num_courses_term = keys %{$term_course->{$termid}};
-					my $course_spread_factor = ($num_courses_term / $tot_num_courses);
-					my $idf = 0;
-					
-					if (!defined $term){
-						print "\n computeTFIDFs: Exception: $termid \t $term not found in TF table ";
-						exit(0);
-					}
-					if (!defined $df){
-						print "\n computeTFIDFs: Exception: idf not read. $termid \t $term \t $courseid \t $normlize ";
-						exit(0);
-					}
-
-					if (!defined $num_threads){
-						die "\n computeTFIDFs: Exception: num_threads not read. $courseid. $normlize. ";
-					}
-					
-					if ($df == 0){	$idf = 0;	}
-					elsif($tot_num_threads==0 || $course_spread_factor ==0){
-						print "\nZero exception:  \t $course_spread_factor \t $num_courses_term";
-					}
-					else{
-						#$idf = log($tot_num_threads/ $df)/log(10);
-						$idf = $tot_num_threads / $df;
-						#$idf = log( ($tot_num_threads/ $df) * $course_spread_factor)/log(10);
-						#$idf = ($tot_num_threads/ $df) * $course_spread_factor;
-					}
-
-					###round off idf score to 3 decimal places
-					$idf = sprintf("%.3f", $idf);
-					###tf.idf				
-					if ( $puretf || $logtf || $booltf){
-						$termWeights{$courseid}{$threadid}{$termid}	= $tf;
-					}
-					else{
-						my $termweight = $tf * $idf;
-						$termWeights{$courseid}{$threadid}{$termid}	= $termweight;
-					}
+					$idf = $tot_num_threads / $df;
 				}
-				#debug
-				# open (my $DEBUG, ">$path/debug_file.txt") or die "cannot open $path/debug_file.txt";
-				# print $DEBUG "\n $termid \t $term \t $df \t $idf";
-				# close $DEBUG;
-				# exit(0);
-				#debug ends
+
+				###round off idf score to 3 decimal places
+				$idf = sprintf("%.3f", $idf);
+				
+				###tf.idf				
+				if ( $puretf || $logtf || $booltf){
+					$termWeights{$courseid}{$threadid}{$termid}	= $tf;
+				}
+				else{
+					my $termweight = $tf * $idf;
+					$termWeights{$courseid}{$threadid}{$termid}	= $termweight;
+				}
 			}
-			
 		}
 	}
 	return \%termWeights;
@@ -3547,21 +1907,6 @@ sub getMeanPosttimeDifferences{
 	$posttimesth->execute($threadid,$courseid) or die $dbh->errstr;
 	$commenttimesth->execute($threadid,$courseid) or die $dbh->errstr;
 	
-	# my @post_times = @{$posttimesth->fetchall_arrayref()};
-	# my @comment_times = @{$commenttimesth->fetchall_arrayref()};
-	
-	# if ( scalar @post_times == 0){ 
-		# return -1;
-	# }
-	
-	# my @times;
-	# foreach (@post_times){		
-		# push @times, $_->[0];
-	# }
-	
-	# foreach (@comment_times){
-		# push @times, $_->[0];
-	# }
 	my @posts = @{$posttimesth->fetchall_arrayref()};
 	my @comments = @{$commenttimesth->fetchall_arrayref()};	
 		
@@ -3646,6 +1991,117 @@ sub printTermVector{
 	foreach my $term ( sort {$a<=>$b} (keys %$term_vector) ){
 		printf "\n $term \t %.3f\t", $term_vector->{$term};		
 	}
+}
+
+sub extractNgrams{
+	my ($text, $n, $stem, $stopword) = @_;
+	
+	$text = Preprocess::replaceURL($text);	
+	$text = Preprocess::replaceTimeReferences($text);
+	$text = Preprocess::replaceMath($text);
+	my $sentences = Preprocess::getSentences($text);
+	$sentences = Preprocess::removeMarkers($sentences);
+	$sentences = Preprocess::removePunctuations($sentences);
+
+	my $tokens = Preprocess::getTokens($sentences,0);
+	
+	#lowercase tokens. This affects stopword removal.
+	foreach (@$tokens){
+		$_  = lc($_);
+	}
+	
+	if(!$stopword){
+		# curated list of 100+ stopwords. Minimal reduction
+		$tokens = Preprocess::removeStopWords($tokens,4);
+	}
+	else{
+		# a standard strict filtering of 600 odd terms
+		$tokens = Preprocess::removeStopWords($tokens,3);
+	}
+	
+	if( $stem ){
+		$tokens = Preprocess::stem($tokens);
+	}
+	
+	$tokens = Preprocess::removeOrphanCharacters($tokens);	
+	#chunk tokens by sentences and remember order of appearance of words by chunk
+	my $gramtext = join ' ', @$tokens;
+	my $ngrams = Lingua::EN::Ngram->new;
+	$ngrams->text($gramtext);
+	
+	# term frequency
+	my $grams = $ngrams->ngram( $n );
+	
+	# the ngrams package screws up some tokens
+	# reducing some terms to orphan characters 
+	# and to stopwords such as 'a' and 'th'
+	my @ngramtokens;
+	foreach my $ngram ( keys %$grams ) {
+		push ( @ngramtokens, (split (/\s/, $ngram)) );
+	}
+	
+	my $gramtokens = \@ngramtokens;
+	if(!$stopword){
+		# curated list of stopwords. Minimal reduction
+		$gramtokens = Preprocess::removeStopWords($gramtokens,4);
+	}
+	else{
+		# a standard strict filtering of 600 odd terms
+		$gramtokens = Preprocess::removeStopWords($gramtokens,3);
+	}
+	
+	$gramtokens = Preprocess::removeOrphanCharacters($gramtokens);
+	
+	my %filteredtokens = (); 
+	foreach (@$gramtokens){
+		$filteredtokens{ $_ } = 1;
+	}
+	
+	foreach my $ngram ( keys %$grams ) {
+		my @ngramtokens = split (/\s/, $ngram);
+		foreach my $gram ( @ngramtokens ) {
+			if ( !exists $filteredtokens{$gram} || scalar (@ngramtokens) < $n ){
+				delete $grams->{$ngram};
+				last;
+			}
+		}
+	}
+
+	return $grams;
+}
+
+sub getMaxTfs{
+	my ($dbh,$courses) = @_;
+	my $qry = "select termid, maxtf, courseid 
+					from termFreqMax where courseid in (";
+	foreach my $course (@$courses){
+		$qry .= " \'$course\',";
+	}
+	$qry =~ s/\,$//;
+	$qry .= " ) ";
+	
+	my $sth = $dbh->prepare($qry) or die "cannot prepare maxtfs qry \n $!";
+	$sth->execute() or die "cannot execute maxtfs qry \n $!";
+	my @maxtfs_arr = @{$sth->fetchall_arrayref()};
+	my %maxtfs = ();
+	foreach my $row (@maxtfs_arr) {
+		$maxtfs{$row->[2]}{$row->[0]} = $row->[1];		
+	}
+	return \%maxtfs;
+}
+
+sub normalizeTermWeights{
+	my($term_vector, $terms, $num_inter, $max_tf) = @_;
+	
+	foreach my $termid (keys %$term_vector ){
+		my $tf = $term_vector->{$termid};
+		# Normalize term weights for #threads and #interventions
+		# in this course
+		$tf = normalize( $tf, $max_tf->{$termid}, $num_inter);
+		$term_vector->{$termid} = $tf;
+	}
+	
+	return $term_vector;
 }
 
 1;

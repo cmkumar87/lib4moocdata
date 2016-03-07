@@ -316,4 +316,75 @@ sub updateInterventionDensity{
 		$updatesth->execute($num_threads, $num_interthreads, $courseid, $forumid);
 	}
 }
+
+
+sub getalltfs{
+	my ($dbh, $tftab, $course_samples, $terms, $stem, $length) = @_;
+	
+	if(!defined $dbh){
+		print "\n database handler undefined in getalltfs";
+		exit(0);
+	}
+	
+	if(!defined $tftab){
+		print "\n tftab undefined in getalltfs";
+		exit(0);		
+	}
+	
+	if(!defined $course_samples || (keys %$course_samples == 0)){
+		print "\n course_samples undefined or 0 in getalltfs";
+		exit(0);		
+	}
+	
+	if(!defined $terms || (keys %$terms == 0)){
+		print "\n terms undefined or 0 in getalltfs";
+		exit(0);		
+	}
+	
+	my $termTFquery = "select termid, courseid, threadid, tf from $tftab
+						where courseid in ( ";
+
+	foreach my $courseid (keys %{$course_samples} ){
+		$termTFquery .= "\'$courseid\', ";
+	}
+	$termTFquery =~ s/,\s?$//;
+	$termTFquery .= " )";
+	
+	if (defined $length){
+		$termTFquery .= " and length(term) > $length";
+	}
+	
+	print "\nExecuting... $termTFquery";
+	
+	my @termTFrows =  @{$dbh->selectall_arrayref($termTFquery)};
+	#print "\n Model.pm termtfrows " .(scalar @termTFrows)."\n";
+	
+	my %termfreq = ();
+	foreach my $tfrow (@termTFrows ){
+		my $courseid = $tfrow->[1];
+		my $threadid = $tfrow->[2];
+
+		my $termid = $tfrow->[0];
+		my $tf = $tfrow->[3];
+		
+		if(defined $terms && !exists $terms->{$termid}){
+			next;
+		}		
+		
+		if(!exists $termfreq{$courseid}{$threadid}{$termid}){
+			$termfreq{$courseid}{$threadid}{$termid} = $tf;
+		}
+		else{
+			$termfreq{$courseid}{$threadid}{$termid} += $tf;
+		}
+	}
+	
+	if(keys %termfreq == 0){
+		print "Exception: TFs are empty in Model.pm";
+		exit(0);
+	}
+	
+	return \%termfreq;
+}
+
 1;
