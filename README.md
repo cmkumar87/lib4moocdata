@@ -1,4 +1,4 @@
-# lib4moocdata
+#http://strawberryperl.com/lib4moocdata
 Library for processing MOOC data dumps.  Currently limited to Coursera data.
 
 Coursera data export
@@ -24,5 +24,11 @@ Note that Coursera supplies a sql export for every course. This means DDL statem
 i) create a separate MySQL database for each course dump (1 per each course iteration) or
 ii) add a 'coursecode' field to every table and issue update statements to populate the coursecode field after running the *.sql import
 
+Installation
+------------
+The scripts require you to have installed Perl 5 and some dependant perl packages.
+
+<b>For Windows users </b>
+Install Strawberyy Perl from here 
 
 
