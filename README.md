@@ -36,6 +36,7 @@ Linux and Mac users should have perl already installed as part of your OS. You c
 <h4>Dependant Perl Modules (Packages) to install</h4>
 CPAN has tools to easy install perl modules. Please see this step-by-step tutorial http://www.cpan.org/modules/INSTALL.html <br>
 The packages to install are:
+<ul>
 <li>DBI</li>
 <li>FindBin</li>
 <li>Getopt::Long</li>
@@ -47,8 +48,8 @@ The packages to install are:
 <li>Lingua::EN::StopWordList</li>
 <li>Lingua::Stem::Snowball</li>
 <li>Lingua::EN::Ngram</li>
-<li>Lingua::EN::Bigram;</li>    #fails on linux centos 6
+<li>Lingua::EN::Bigram ## Fails on linux centos 6 </li>
 <li>Lingua::EN::Tagger</li>
 <li>Lingua::EN::PluralToSingular 'to_singular'</li>
 <li>Config::Simple</li>
-
+</ul>
