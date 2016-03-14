@@ -107,8 +107,13 @@ $inserttermIDF 		.= "values(?,?,?,?)";
 my $inserttermIDFsth = $dbh->prepare($inserttermIDF)
 										or die "prepare for insert faield $!";
 										
-open (my $log ,">$path/../log/$progname.log")
-						or die "cannot open file $path/../log/$progname.log for writing";
+open (my $log ,">$path/../log/$progname"."_$courseid.log")
+			or die "cannot open file $path/../log/$progname"."_$courseid.log for writing";
+
+if(@courses eq 0){
+	print $log "\n No courses selected. Exiting..."; exit(0);
+}
+
 if($df){
 	foreach my $courseid (@courses){
 		my $dfterms;

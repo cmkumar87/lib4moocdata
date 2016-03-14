@@ -387,4 +387,38 @@ sub getalltfs{
 	return \%termfreq;
 }
 
+sub getalltermIDF{
+	my ($dbh, $freqcutoff, $stem, $courses) = @_;
+
+	# if(!defined $courses){
+		# die "Exception: getalltermIDF: courses not defined \n";
+	# }
+	
+	my $termIDFquery;
+	
+	$termIDFquery	 = "select termid,term,sum(df) sumdf from termIDF ";
+	
+	if(defined $courses){
+		$termIDFquery	.= "where courseid in ( ";
+		foreach my $course (@$courses){
+			$termIDFquery .= " \'$course\',";
+		}
+		$termIDFquery  =~ s/\,$//;
+		$termIDFquery .= " ) ";
+	}
+	
+	$termIDFquery .= "group by termid ";
+	
+	if(defined $freqcutoff){
+		$termIDFquery .= "having sumdf > $freqcutoff ";
+	}
+	
+	print "\nExecuting IDFquery... $termIDFquery\n";
+	
+	my %terms = ();
+	%terms = %{$dbh->selectall_hashref($termIDFquery,'termid')};
+	
+	return \%terms;
+}
+
 1;

@@ -191,7 +191,7 @@ sub generateTrainingFile{
 	my $termsstem;
 
 	if($unigrams){
-		$terms		 = Model::getalltermIDF($dbh,$freqcutoff,0,$corpus,$normalize);
+		$terms		 = Model::getalltermIDF($dbh,$freqcutoff,0,$corpus);
 		#sanity check
 		if (keys %{$terms} == 0 ){
 			die "Exception: termIDFs are empty for $corpus_type. Check the tables and the query!\n @$corpus";
@@ -546,8 +546,6 @@ sub generateTrainingFile{
 			}
 			
 			if($numw){
-				if ($normalize) {
-				}
 				#log transformation to prevent loss of precision
 				if ( $thread_length{$docid} != 0){
 					$thread_length{$docid} = log ($thread_length{$docid}) / log(10);
@@ -557,56 +555,6 @@ sub generateTrainingFile{
 			}
 			
 			if($numsentences && defined $numsentences{$docid}){
-				if ($normalize) {
-					if(!exists $maxnumsentences{$courseid}){
-						$maxnumsentences{$courseid} = 0;
-					}
-					
-					if(!exists $minnumsentences{$courseid}){
-						$minnumsentences{$courseid} = 999999;
-					}	
-				
-					($maxnumsentences{$courseid}, $minnumsentences{$courseid}) 
-										=	getMaxMin( $numsentences{$docid},
-													   $maxnumsentences{$courseid},
-													   $minnumsentences{$courseid},
-													   "num_sentences"
-													 );
-					
-					if(!exists $maxavgnumsentences{$courseid}){
-						$maxavgnumsentences{$courseid} = 0.0;
-					}
-					
-					if(!exists $minavgnumsentences{$courseid}){
-						$minavgnumsentences{$courseid} = 999999.999;
-					}
-					
-					$avgnumsentences{$docid} = $numsentences{$docid} / $numposts{$docid};
-					($maxavgnumsentences{$courseid}, $minavgnumsentences{$courseid})
-										=	getMaxMin( $avgnumsentences{$docid},
-														$maxavgnumsentences{$courseid},
-														$minavgnumsentences{$courseid},
-														"avg_num_sentences"
-													 );
-													 
-					if (defined $numsentences_first{$docid}){
-						if(!exists $maxnumsentences_first{$courseid}){
-							$maxnumsentences_first{$courseid} = 0;
-						}
-						
-						if(!exists $minnumsentences_first{$courseid}){
-							$minnumsentences_first{$courseid} = 999999;
-						}
-						
-						($maxnumsentences_first{$courseid}, $minnumsentences_first{$courseid}) 
-										=	getMaxMin( $numsentences_first{$docid},
-														$maxnumsentences_first{$courseid},
-														$minnumsentences_first{$courseid},
-														"num_sentences_first"
-													 );
-					}
-				}
-				else{
 					($maxnumsentences, $minnumsentences) =	getMaxMin( $numsentences{$docid},
 																	   $maxnumsentences,
 																	   $minnumsentences,
@@ -627,7 +575,6 @@ sub generateTrainingFile{
 																						"num_sentences_first"
 																					 );
 					}
-				}
 			}
 		
 			if($courseref ){
@@ -837,8 +784,7 @@ sub generateTrainingFile{
 											$total_num_threads,
 											$corpus_type,
 											$dbh,
-											$tftype,	#uses normalised tf without idf
-											$coursewiseIDF
+											$tftype	#uses normalised tf without idf
 										);	
 		if (keys %{$termWeights} ==0 ){
 			print LOG "\n termweights matrix is empty "; exit(0);
@@ -1452,7 +1398,9 @@ sub averageTermIDF{
 }
 
 sub computeTFIDFs{
-	my ($termFrequencies, $termIDFs, $term_course, $num_threads, $corpus_type, $dbh, $tftype, $coursewiseIDF) = @_;
+	my ($termFrequencies, $termIDFs, 
+		$term_course, $num_threads, 
+		$corpus_type, $dbh, $tftype) = @_;
 	
 	if(!defined $termIDFs || keys %$termIDFs eq 0){
 		print "\n computeTFIDFs: IDFs not defined. Check IDF table and retrieval steps ";
@@ -1528,12 +1476,12 @@ sub computeTFIDFs{
 					exit(0);
 				}
 				if (!defined $df){
-					print "\n computeTFIDFs: Exception: idf not read. $termid \t $term \t $courseid \t $normlize ";
+					print "\n computeTFIDFs: Exception: idf not read. $termid \t $term \t $courseid ";
 					exit(0);
 				}
 
 				if (!defined $num_threads){
-					die "\n computeTFIDFs: Exception: num_threads not read. $courseid. $normlize. ";
+					die "\n computeTFIDFs: Exception: num_threads not read. $courseid";
 				}
 				
 				if ($df == 0){	$idf = 0;	}

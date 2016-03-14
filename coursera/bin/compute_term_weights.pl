@@ -140,12 +140,12 @@ if(!defined $dbname){
 my $datahome = "$path/../data";
 my $dbh = Model::getDBHandle($datahome,undef,undef,$dbname);
 
+open (my $log ,">$path/../logs/$progname"."_$dbname.log")
+			or die "cannot open file $path/../logs/$progname"."_$dbname.log for writing";
 if(!defined $dbh){
+	print $log "\n Exception dbhandle not defined"; 
 	print "\n Exception dbhandle not defined"; exit(0);
 }
-
-open (my $log ,">$path/../logs/$progname.log")
-			or die "cannot open file $path/../logs/$progname.log for writing";
 
 print $log "\n Using database file at $datahome/$dbname";
 # counts only posts where an instructor/TA/Staff has replied to a post
@@ -208,13 +208,17 @@ else{
 									'General','Project','Discussion','PeerA')";
 }
 
-if(defined @courses){
+if(defined $course){
 	$forumidsquery = Model::appendListtoQuery($forumidsquery,\@courses,' courseid ',' and ');
 }
 
 my $forumrows		= $dbh->selectall_arrayref($forumidsquery) 
 								or die "Courses query failed! $DBI::errstr \n $forumidsquery";
 
+if(@$forumrows eq 0){
+	print "\n No courses selected. Exiting...";
+	print $log "\n No courses selected. Exiting..."; exit(0);
+}
 my $countofthreads	= "select count(1) from thread 
 						where forumid=? and courseid=? 
 						and inst_replied = ?";
@@ -264,7 +268,6 @@ if( $threadcount ){
 	exit(0);
 }
 
-
 my $insertunigramsidfqry = "insert into $idftable (termid,term,df,idf,stem,courseid,forumid) 
 																		values(?,?,?,?,?,?,?)";
 my $insertunigramsidfsth = $dbh->prepare($insertunigramsidfqry)
@@ -295,20 +298,22 @@ if($idf && $mode eq 'inc'){
 	foreach my $courseid ( keys %$alldf ){
 		foreach my $forumid ( keys %{$alldf->{$courseid}} ){	
 			foreach my $term ( keys %{$alldf->{$courseid}{$forumid}} ){	
-				$df->{$courseid}{$forumid}{$term} = $alldf->{$courseid}{$forumid}{$term}
+				$df->{$courseid}{$forumid}{$term} = $alldf->{$courseid}{$forumid}{$term};
 			}
 		}
 	}	
 	
 	#sanity check
-	foreach my $courseid ( keys %$df ){
-		foreach my $forumid ( keys %{$df->{$courseid}} ){	
-			print "\n #terms in the copy: $courseid ". keys (%$df->{$courseid}{$forumid});
-			if ( keys( %{$df->{$courseid}{$forumid}} ) != keys(%$alldf->{$courseid}{$forumid}) ){
-				die "Exception: inc mode error. dfs not initialized properly";
-			}
-		}
-	}
+	# foreach my $courseid ( keys %$df ){
+		# foreach my $forumid ( keys %{$df->{$courseid}} ){	
+			# print $log "\n #terms in the copy: $courseid ". keys (%$df->{$courseid}{$forumid});
+			# if ( keys( %{$df->{$courseid}{$forumid}} ) != keys(%$alldf->{$courseid}{$forumid}) ){
+				# print $log "Exception: inc mode error. dfs not initialized properly";
+				# print "Exception: inc mode error. dfs not initialized properly";
+				# exit(0);
+			# }
+		# }
+	# }
 }
 
 foreach my $forumrow ( @$forumrows ){
