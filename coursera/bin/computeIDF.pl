@@ -40,8 +40,10 @@ sub License{
 
 sub Help{
 	print STDERR "Usage: $progname -h\t[invokes help]\n";
-  	print STDERR "       $progname [-stem -q -debug]\n";
+  	print STDERR "       $progname [-df|-idf] [-q]\n";
 	print STDERR "Options:\n";
+	print STDERR "\t-df populate termIDF table with terms and df values\n";
+	print STDERR "\t-idf update termIDF table entries with idf values\n";
 	print STDERR "\t-q \tQuiet Mode (don't echo license).\n";
 	print STDERR "\t-debug \tPrint additional debugging info to the terminal.\n";
 }
@@ -49,19 +51,15 @@ sub Help{
 my $dbname	= undef;
 my $help	= 0;
 my $quite	= 0;
-my $debug	= 0;
-my $test	= 0;
-my $idf;
-my $df;
-my $corpus;
+my $course	= undef;
+my $idf		= 0;
+my $df		= 0;
 
 $help = 1 unless GetOptions(
-				'dbname'	=> \$dbname,
-				'df'		=> \$df,
+				'dbname=s'	=> \$dbname,
+				'course=s'	=> \$course,
+				'df'		=> \$df,	
 				'idf'		=> \$idf,
-				'corpus=s'	=> \$corpus,
-				'test'		=> \$test,
-				'debug'		=> \$debug,
 				'h' 		=> \$help,
 				'q' 		=> \$quite
 			);
@@ -92,9 +90,11 @@ if(defined $course){
 }
 else{
 	my $coursesquery 		= "select distinct courseid from forum ";
-	my $courses_arrayref	= $dbh->selectcol_arrayref($forumidsquery) 
-									or die "Query failed! $! \n $forumidsquery !";
-	@courses				= @$courses_arrayref;
+	my $courses_arrayref	= $dbh->selectcol_arrayref($coursesquery) 
+									or die "Query failed! $! \n $coursesquery !";
+	foreach my $course (@$courses_arrayref){
+		push (@courses, $course);
+	}
 }
 
 my $termDFquery		 = "select termid, term, courseid, sum(df) sumdf from termDF ";
@@ -102,13 +102,26 @@ $termDFquery		.=  " where courseid = ? ";
 $termDFquery		.=  " group by termid";
 my $termDFquerysth	 = $dbh->prepare($termDFquery) or die "df prepare failed $!";
 
-my $inserttermIDF 	 = "insert into termIDF (termid,term,df,courseid) ";
-$inserttermIDF 		.= "values(?,?,?,?)";
-my $inserttermIDFsth = $dbh->prepare($inserttermIDF)
+my $inserttermIDFquery 	 = "insert into termIDF (termid,term,df,courseid) ";
+$inserttermIDFquery		.= "values(?,?,?,?)";
+my $inserttermIDFsth = $dbh->prepare($inserttermIDFquery)
 										or die "prepare for insert faield $!";
-										
-open (my $log ,">$path/../log/$progname"."_$courseid.log")
-			or die "cannot open file $path/../log/$progname"."_$courseid.log for writing";
+
+my $log_file_name = "$progname"."_$course";
+if ($df){
+	$log_file_name	.= "_df";
+}
+elsif ($idf){
+	$log_file_name	.= "_idf";
+}
+else{
+	print "Exception: Must specify either df or idf option in the commandline";
+	Help();
+	exit(0);
+}
+
+open (my $log ,">$path/../logs/$log_file_name.log")
+			or die "cannot open file $path/../logs/$log_file_name.log for writing";
 
 if(@courses eq 0){
 	print $log "\n No courses selected. Exiting..."; exit(0);
@@ -117,13 +130,18 @@ if(@courses eq 0){
 if($df){
 	foreach my $courseid (@courses){
 		my $dfterms;
+		print $log "Executing $termDFquery \n with args:course-$courseid";
 		$termDFquerysth->execute($courseid);
 		$dfterms = $termDFquerysth->fetchall_arrayref();
 		if (scalar @$dfterms == 0) {
-			print $log "$courseid doesn\'t have terms";
+			print $log "\n $courseid doesn\'t have terms. 
+						Please check if your courseid $courseid is correct.";
+		}
+		else{
+			print $log "\n Found ". scalar(@$dfterms) ." terms in termdf table for $courseid";
 		}
 		
-		#defer commit by tuning off autocommit
+		#for performance reasons defer commit by tuning off autocommit
 		$dbh->{AutoCommit} = 1;
 		$dbh->begin_work;
 		foreach my $termrow (@$dfterms){
@@ -131,17 +149,18 @@ if($df){
 			my $term 		= $termrow->[1];
 			my $courseid	= $termrow->[2];
 			my $sumdf		= $termrow->[3];
+			print $log "\n Insert termid-$termid \t term-$term \t sumdf-$sumdf course-$courseid";
 			$inserttermIDFsth->execute($termid,$term,$sumdf,$courseid) 
-											or die "insert failed $!";
+								or die "insert failed $! \n $inserttermIDFquery";
 		}
-		#commit
+		#issue commit manually
 		$dbh->commit;
 	}
 }
 
 if ($idf){
 	my $termIDFquery = "select termid, courseid, df from termIDF ";
-	if (defined $courseid){
+	if (defined $course){
 		$termIDFquery = Model::appendListtoQuery($termIDFquery,\@courses, ' courseid ', ' where ');
 	}
 	print "\nExecuting... $termIDFquery";
@@ -164,13 +183,13 @@ if ($idf){
 		# log() calculates natural logarithm
 		# but we need log base 10
 		my $idf = log($num_threads->{$courseid} / $df)/log(10);
-		print $log "\n Updating IDF for $courseid \t $termid";
+		print $log "\n Updating IDF to $idf for $courseid \t $termid";
 		$updateIDF->execute($idf,$termid,$courseid);
 	}
 	#commit
 	$dbh->commit;
 }
 
-print $log "\n #Done#"
+print $log "\n #Done#";
 Utility::exit_script($progname,\@ARGV);
 print "\n #Done#"
