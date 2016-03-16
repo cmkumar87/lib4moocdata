@@ -15,7 +15,6 @@ use FindBin;
 use Getopt::Long;
 use utf8::all;
 use File::Remove 'remove';
-use DateTime::Format::Epoch;
 
 my $path;	# Path to binary directory
 
@@ -37,15 +36,15 @@ my $outputVersion = "1.0";
 ### END user customizable section
 
 sub License{
-	#print STDERR "# Copyright 2014 \251 Muthu Kumar C\n";
+	print STDERR "# Copyright 2014 \251 Muthu Kumar C\n";
 }
 
 sub Help{
 	print STDERR "Usage: $progname -h\t[invokes help]\n";
-  	print STDERR "       $progname -n [-test -mode -cutoff -stem -tlen -time 
-										-tftype	-cutoff	-forumtype		
-										-courseref	-affir	-stem		
-										-tprop	-nums	-q	]\n";
+  	print STDERR "       $progname -n [-dbname -mode -cutoff -stem
+										-tftype	-tprop -forumtype		
+										-courseref	-affir		
+										-nums	-q	]\n";
 	print STDERR "Options:\n";
 	print STDERR "\t-n	\t Number of instances to sample. \n";
 	print STDERR "\t-mode \t all: sample  +ve and -ve. \n\t\t ne: sample -ve. \n\t\t po: sample +ve. \n";
@@ -58,9 +57,6 @@ my $help				= 0;
 my $quite				= 0;
 my $debug				= 0;
 my $dbname				= undef;
-
-my $test				= 0;
-my $data				= 0;
 my $courseid			= undef;
 
 my $freqcutoff 			= undef;
@@ -86,25 +82,18 @@ my $unigrams			= 0;
 
 my $oversample			= 0;
 my $num_folds			= undef;
-my $hold_out_test		= 0;
-my $hold_out_course		= 0;
 my $print_format		= 'none';
-my $cv					= 0;
 my $start_index			= 0;
 my $end_index			= undef; # takes the value of #folds if left undefined
 
 my $outfile;
 my $tftab;
-my $pdtbfilepath		= "$path/../$courseid";
 
 $help = 1 unless GetOptions(
 				'allf'			=>	\$allfeatures,
 				'dbname=s'		=>	\$dbname,
 				'course=s'		=>	\$courseid,
 				'folds=i'		=>	\$num_folds,
-				'norm'			=>	\$normalize,
-				'hold'			=>	\$hold_out_test,
-				'cv'			=>	\$cv,
 				'sindex=i'		=>	\$start_index,	# index to start the cv loop at
 				'eindex=i'		=>	\$end_index,	# index to end the cv loop at
 				'osample'		=>	\$oversample,
@@ -114,7 +103,6 @@ $help = 1 unless GetOptions(
 				'lencut=i'		=>	\$term_length_cutoff,
 				'tftype=s'		=>	\$tftype,
 				'idftype=s'		=>	\$idftype,
-				'bi'			=>	\$bigrams,
 				#NON-UNIGRAM FEATURES
 				'forumtype'		=> 	\$forumtype,
 				'affir'			=>	\$affirmations,
@@ -127,7 +115,6 @@ $help = 1 unless GetOptions(
 				'stem'			=>	\$stem,
 				#features end here
 				'debug'			=>	\$debug,
-				'corpus=s'		=>	\$data, #pilotrun using one course's data
 				'h' 			=>	\$help,
 				'q' 			=>	\$quite
 			);
@@ -147,47 +134,43 @@ if (!$quite){
 	License();
 }
 
-$outfile = "../experiments/";
+my $courses;
+if(defined $courseid){
+	push (@$courses, $courseid);
+}
+else{
+	print "\n Exception! courseid not defined. Exiting.";
+	Help();
+	exit(0);
+}
+
+my $error_log_file	= "$path/../logs/$progname"."_$courseid".".err.log";
+my $pdtbfilepath	= "$path/../$courseid"."_pdtbinput";
+my $log_file_name = "$progname"."_$courseid";
+open (my $log ,">$path/../logs/$log_file_name.log")
+				or die "cannot open file $path/../logs/$log_file_name.log for writing";
+
 
 if($allfeatures){
-	print "May include non-unigram features: tftype: $tftype idftype:$idftype\n";
+	print $log "\n May include non-unigram features: tftype: $tftype idftype:$idftype\n";
 }
 elsif($unigrams){
-	print "unigram features only: tftype: $tftype idftype:$idftype\n";
+	print $log "\n unigram features only: tftype: $tftype idftype:$idftype\n";
 }
 
+if(!defined $dbname){
+	print $log "\n Exception: dbname not defined";
+	print "\n Exception: dbname not defined"; exit(0);
+}
 
-my $db_path			= $path."/../testdb";
-my $dbh = Model::getDBHandle($db_path,undef,undef,$dbname);
-
-my $dt = DateTime->new( year => 1970, month => 1, day => 1 );
-my $dateformatter = DateTime::Format::Epoch->new(
-				  epoch					=> $dt,
-				  unit					=> 'seconds',
-				  type					=> 'int',    # or 'float', 'bigint'
-				  #skip_leap_seconds	=> 1,
-				  start_at				=> 0,
-				  local_epoch			=> undef,
-			  );
-
-# sample n courses
-# my $max_course_sample_id = scalar @courses_master_list;
+my $db_path		= $path."/../data";
+my $dbh 		= Model::getDBHandle($db_path,undef,undef,$dbname);
 
 # Next sample from threads of those n courses
 my %docid_to_serialid	= ();
 my %instreplied			= ();
 my $serial_id			= 0;
-
-my $corpus_type;
-
-my @trainingcourses	= (	'reasonandpersuasion-001', 'randomness-001', 'classicalcomp-001', );
-						
-my @testingcourses  = ('reasonandpersuasion-001',	'randomness-001', 'classicalcomp-001');
-
-my @courses_master_list;
-
-push (@courses_master_list, @testingcourses);
-
+my $corpus_type			= undef;
 		
 my @additive_sequence	= (0,1,3,7,15,31,63);
 my @ablation_sequence	= (-31,47,55,59,61);
@@ -198,18 +181,21 @@ my @uni_plus_forumtype	= (0,1);
 my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
-my @iterations			= (1);
+my @iterations			= (0,1,3,7,15,31,63);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
-	print "\n\n Did you forget to switch 'allf' on?";
+	print $log "\n\n Did you forget to switch 'allf' on?";
 	Help();
 	exit(0);
 }
 
+mkdir("$path/../experiments");
 my $exp_path 		= "$path/../experiments";
-my $tmp_file 		= "$exp_path/tmp_file/tmp_samples_$courseid";
-my $error_log_file	= "$path/../logs/$progname."_".$courseid".".err.log";
+$outfile 			= "../experiments/";
+
+mkdir("$path/../tmp_file");
+my $tmp_file 		= "$path/../tmp_file/tmp_samples_$courseid";
 
 # CREATE MULTIPLE TEST AND TRAINING DATASETS FROM THE OVERALL
 # LIST OF ALL COURSES
@@ -219,7 +205,7 @@ my %course_samples 			= ();
 my %allthreads 				= ();
 my %held_out_data_keys		= ();
 
-my $num_courses = scalar @courses_master_list;
+my $num_courses 			= 1;
 
 my $threadsquery = 	"select docid, courseid, id, 
 						inst_replied from thread 
@@ -231,14 +217,13 @@ my $threadssth = $dbh->prepare($threadsquery) or die "prepare failed \n $!\n";
 
 if(!defined $end_index){
 	$end_index = $num_folds;
-	print "\n assigning end index to $num_folds";
+	print $log "\n assigning end index to $num_folds";
 }
 
-my $courses = [$courses_master_list[0]]; 
 my $corpus;	
 
 foreach my $course (@$courses){
-		push (@$corpus, $course);
+	push (@$corpus, $course);
 }
 
 #add all threads in the corpus 
@@ -264,17 +249,19 @@ foreach my $courseid (@$corpus){
 
 #sanity checks
 if (keys %course_samples == 0 ){
-	die "\nException: Specified corpus not found!";
+	print "\nException: Specified corpus not found!";
+	print $log "\nException: Specified corpus not found!";
+	exit(0);
 }
 
 if (keys %course_samples != scalar @$corpus ){
-	warn "\nException: Only ". (scalar @$corpus)  ." out of ". (keys %course_samples) ." courses found in the corpus! Checking further...";
+	print $log "\nException: Only ". (scalar @$corpus)  ." out of ". (keys %course_samples) ." courses found in the corpus! Checking further...";
 	foreach my $courseid (@$corpus){
 		if (!exists $course_samples{$courseid} ){
-			warn "\nException: $courseid not found. Pls check courseid and the database";
+			print $log "\nException: $courseid not found. Pls check courseid and the database";
 		}
 	}
-	die;
+	exit(0);
 }
 
 #add the threads (%allthreads)
@@ -295,12 +282,13 @@ foreach my $courseid (@$courses){
 			my $courseid = $row->[1];
 			my $threadid = $row->[2];
 			
-			my $inst_replied = $row->[3];
-			my $docid = $row->[0];
+			my $inst_replied	= $row->[3];
+			my $docid 			= $row->[0];
 			
 			#Sanity checks
 			if (!defined $docid ){
-				die "DOCID is null for $courseid \t $threadid \t $forumidnumber \t $inst_replied \n";
+				print $log "DOCID is null for $courseid \t $threadid \t $forumidnumber \t $inst_replied \n";
+				exit(0);
 			}
 			if (!defined $courseid ){
 				die "courseid is null for $docid  \n";
@@ -317,7 +305,7 @@ foreach my $courseid (@$courses){
 			if ($inst_replied) { $instreplied{$serial_id} = 1; } 
 			$serial_id ++;
 		}
-		print "\n $courseid \t $forumidnumber\t" . (keys %allthreads) ." threads";
+		print $log "\n $courseid \t $forumidnumber\t" . (keys %allthreads) ." threads";
 	}
 }
 
@@ -334,35 +322,21 @@ if ($num_folds > (keys %allthreads)){
 my $max_thread_sample_id = keys %allthreads;
 
 my $fold_size = int($max_thread_sample_id / $num_folds);
-print "\nNum folds: $num_folds \t Fold size: $fold_size \t \n";
- # $pdtbfilepath	.=  "/classiccomp"."_pdtbinput" ;
- $pdtbfilepath	.=  "/" . $courses_master_list[0] ."_pdtbinput" ;
+print $log "\nNum folds: $num_folds \t Fold size: $fold_size \t \n";
+
 ####################*******************#######################
 for(my $index = $start_index; $index < $end_index; $index ++){
 	my $training_set;
 	my $test_set;	
 
-	 if( $hold_out_test ){
-		# $training_set	=	[$courses_master_list[$index]];
-		# $test_set		=	[$courses_master_list[$index]];
-	 }
-	elsif( $cv ){	
-		($training_set, $test_set) = getTrainTestCourseSetsCV($index, $fold_size, \%allthreads);
-		print "\n generateCVSamplesfromsingleCourses: test and training for fold $index done";
-	}
-	else{
-		print "\n Exception: Must specify a sampling mode (cv)";
-		Help();
-		exit(0);
-	}
+	($training_set, $test_set) = getTrainTestCourseSetsCV($index, $fold_size, \%allthreads);
+	print "\n generateCVSamplesfromsingleCourses: test and training for fold $index done";
 	
 	$datasets{"training$index"} =  $training_set;
 	$datasets{"test$index"}  	=  $test_set;
-	#print "\n$index	\t test \t @$test_set";
-	#print "\n$index \t train \t @$training_set";
 }
 
-print "\n train and test datasets identified";
+print $log "\n train and test datasets identified";
 
 foreach my $type ("test","training"){
 	for(my $fold = $start_index; $fold < $end_index; $fold ++){
@@ -372,114 +346,47 @@ foreach my $type ("test","training"){
 			print "\n Iteration $iter begins. Set $d0-$d1-$d2-$d3-$d4-$d5-$d6-$d7-$d8-$d9-$d10";
 			
 			$outfile = $exp_path . "/";
-
-			if ($test){
-				print "\n Test ";
-			}
 			
 			if($unigrams){
 				$outfile .= "uni+";
 			}
 			
 			if($allfeatures){
-				# $forumid				= $d0;
-				# $threadtime			= $d1;
-				# $userfeatures			= $d2;
-				##$solvedness			= $d3;
-				# $titlewords			= $d4;
-				# $assessmentwc			= $d5;
-				# $problemwc			= $d6;
-				##$conclusionwc			= $d7;
-				# $requestwc			= $d8;
-				# $posttime				= $d9;
-				
-				$pdtb 				= $d0;
-				# $forumtype 			= $d1;
-				# $affirmations 		= $d2;
-				# $tprop	 			= $d3;
-				# $numsentences 		= $d4;
-				# $nonterm_courseref	= $d5;
-				# $agree			= $d0;
-				
-				# $courseref		= 
-				# $prof 			= 
-				# $senti 			= 
-				# $numquestions 	= 
-				# $numquotes 		= 
-				# $hedge 			= 
+				$forumtype 			= $d0;
+				$affirmations 		= $d1;
+				$tprop	 			= $d2;
+				$numsentences 		= $d3;
+				$nonterm_courseref	= $d4;
+				$agree				= $d5;
+				$pdtb 				= $d6;
+				$courseref			= $d7;
 			}
-			# output file
-			# $outfile .=	$d0		? "forumid+"	: ""; 
-			# $outfile .=	$d1		? "threadtime+"	: "";
-			# $outfile .=	$d2		? "user+"		: "";
-			## $outfile .=	$d3		? "solvedness+"	: "";
-			# $outfile .=	$d4 	? "titles+"		: "";
-			# $outfile .=	$d5		? "assesswc+"	: "";
-			# $outfile .=	$d6		? "probwc+"		: "";
-			## $outfile .=	$d7		? "concwc+"		: "";
-			# $outfile .=	$d8		? "requestwc+"	: "";
-			# $outfile .=	$d9		? "posttime+"	: "";
 			
-			$outfile  .=  $d0 	? "pdtb+"	 		: "";
-			# $outfile  .=  $d1 	? "forum+"			: "";
-			# $outfile  .=  $d2 	? "affir+"  		: "";	
-			# $outfile  .=  $d3 	? "tprop+"			: "";
-			# $outfile  .=  $d4 	? "nums+"			: "";
-			# $outfile  .=  $d5 	? "nont_course+"  	: "";
-			# $outfile  .=  $d0		? "agree+"			: "";
-			# $outfile  .=  $d4		? "course+" 		: "";
-			# $outfile  .=  $d7 	? "prof+"  			: "";
-			# $outfile  .=  $d8 	? "senti+" 	 		: "";
-			# $outfile  .=  $d9 	? "numq+"   		: "";
-			# $outfile  .=  $d10	? "quotes+"			: "";
-			# $outfile  .=  $d11	? "hedge+"  		: "";
+			# output file			
+			$outfile  .=  $d0 	? "forum+"			: "";
+			$outfile  .=  $d1 	? "affir+"  		: "";	
+			$outfile  .=  $d2 	? "tprop+"			: "";
+			$outfile  .=  $d3 	? "nums+"			: "";
+			$outfile  .=  $d4 	? "nont_course+"  	: "";
+			$outfile  .=  $d5	? "agree+"			: "";
+			$outfile  .=  $d6 	? "pdtb+"	 		: "";
+			$outfile  .=  $d7	? "course+" 		: "";
+			
 			$outfile	.=  "_".$type."_".$fold;
-			
-			if($normalize){
-				$outfile .= "_norm";
-			}
-			
-			if($test){
-				$outfile .= "_TEST";
-			}
-			
-			$outfile .= "_". $courses->[0] . ".txt";
+			$outfile 	.= "_". $courses->[0] . ".txt";
 			
 			#feature name file
 			my $feature_file = "features";
-			# $feature_file .=	$d0	? "+forumid"	: ""; 
-			# $feature_file .=	$d1	? "+threadtime"	: "";
-			# $feature_file .=	$d2	? "+user"		: "";
-			# $feature_file .=	$d3	? "+solvedness"	: "";
-			# $feature_file .=	$d4	? "+titles"		: "";
-			# $feature_file .=	$d5	? "+assesswc"	: "";
-			# $feature_file .=	$d6	? "+probwc"		: "";
-			# $feature_file .=	$d7	? "+concwc"		: "";
-			# $feature_file .=	$d8	? "+requestwc"	: "";
-			# $feature_file .=	$d9	? "+posttime"	: "";
 
-			$feature_file .= $d0 	? "+pdtb"	 	: "";
-			# $feature_file .= $d1 	? "+forum"  	: "";
-			# $feature_file .= $d2 	? "+affir"		: "";
-			# $feature_file .= $d3 	? "+tprop"		: "";
-			# $feature_file .= $d4 	? "+nums"  		: "";
-			# $feature_file .= $d5 	? "+nont_course": "";
-			# $feature_file .= $d0 	? "+agree"		: "";
-			# $feature_file .= $d4	? "+course" 	: "";
-			# $feature_file .= $d7 	? "+prof"   	: "";
-			# $feature_file .= $d8 	? "+senti"  	: "";
-			# $feature_file .= $d9 	? "+numq"  		: "";
-			# $feature_file .= $d10	? "+quotes"   	: "";
-			# $feature_file .= $d11	? "+hedge"  	: "";
-			
-			if($normalize){
-				$feature_file .= "_norm";
-			}
-			
-			if($test){
-				$feature_file .= "_TEST";
-			}
-			
+			$feature_file .= $d0 	? "+forum"  	: "";
+			$feature_file .= $d1 	? "+affir"		: "";
+			$feature_file .= $d2 	? "+tprop"		: "";
+			$feature_file .= $d3 	? "+nums"  		: "";
+			$feature_file .= $d4 	? "+nont_course": "";
+			$feature_file .= $d5 	? "+agree"		: "";
+			$feature_file .= $d6 	? "+pdtb"	 	: "";
+			$feature_file .= $d7	? "+course" 	: "";
+						
 			$feature_file .= "_". $courses->[0] . ".txt";
 			
 			my %samples = ();
@@ -504,8 +411,8 @@ foreach my $type ("test","training"){
 						}
 				}
 				else{
-					print $log "\n Exception: Duplicate keys found in $type set in $fold of $courses->[0] . \n Exiting...";
-					print "\n Exception: Duplicate keys found in $type set in $fold of $courses->[0] . \n Exiting...";
+					print $log "\n Exception: Duplicate keys found in $type set in $fold of @$courses[0] . \n Exiting...";
+					print "\n Exception: Duplicate keys found in $type set in $fold of @$courses[0] . \n Exiting...";
 					exit(0);
 				}
 			}
@@ -554,14 +461,16 @@ foreach my $type ("test","training"){
 			
 			open (my $FH1, ">$tmp_file") or die "cannot open $tmp_file for writing \n $!";
 			open (my $FEXTRACT, ">$error_log_file") or die "cannot open features file$!";
+			
+
 			FeatureExtraction::generateTrainingFile(	$FH1, $dbh, \%threadcats, 
 														$unigrams, $freqcutoff, $stem, $term_length_cutoff, $tftype, $idftype,
 														$tprop, $numw, $numsentences, 
 														$courseref, $nonterm_courseref, $affirmations, $agree,
 														$numposts, $forumtype, 
-														$exp_path, $feature_file, 
-														\%course_samples, $corpus, $corpus_type, $FEXTRACT,
-														$debug, $dateformatter, $pdtb, $pdtbfilepath,$print_format
+														$exp_path, $feature_file,
+														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
+														$debug, $pdtb, $pdtbfilepath, $print_format
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open $tmp_file file for reading \n $!";
@@ -574,14 +483,18 @@ foreach my $type ("test","training"){
 
 			print $log "\n +ve samples:  $samplecount{'+1'} ";
 			print $log "\n -ve samples:  $samplecount{'-1'} ";
-			print $log "\n ##Done##";
+			print $log "\n ##Done $type";
 			
 			print "\n +ve samples:  $samplecount{'+1'} ";
 			print "\n -ve samples:  $samplecount{'-1'} ";
-			print "\n ##Done##";
+			print "\n ##Done $type";
 		}
 	}
 }
+
+print "\n ##Done##";
+print $log "\n ##Done##";
+close $log;
 Utility::exit_script($progname,\@ARGV);
 
 sub addtosample{
@@ -676,13 +589,13 @@ sub getTrainTestCourseSetsCV{
 		if($trainingset_start > $trainingset_end){
 			foreach my $j ($trainingset_start..($num_data_points-1),0..$trainingset_end){
 				push (@trainingset, $j);
-				print $log "$j: $courses->{$j} \t";
+				# print $log "$j: $courses->{$j} \t";
 			}
 		}
 		else{
 			foreach my $j ($trainingset_start..$trainingset_end){
 				push (@trainingset, $j);
-				print $log "$j: $courses->{$j} \t";
+				# print $log "$j: $courses->{$j} \t";
 			}	
 		}
 		
@@ -690,13 +603,13 @@ sub getTrainTestCourseSetsCV{
 		if($testset_start > $testset_end){
 			foreach my $j ($testset_start..($num_courses-1),0..$testset_end){
 				push (@testset, $j);
-				print $log "$j: $courses->{$j} \t";
+				# print $log "$j: $courses->{$j} \t";
 			}
 		}
 		else{
 			foreach my $j ($testset_start..$testset_end){
 				push (@testset, $j);
-				print $log "$j: $courses->{$j} \t";
+				# print $log "$j: $courses->{$j} \t";
 			}
 		}
 		

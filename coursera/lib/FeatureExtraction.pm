@@ -40,16 +40,18 @@ sub generateTrainingFile{
 			$courseref, $nonterm_courseref, $affir, $agree,
 			$tlength, $forumtype,
 			$path, $feature_file,
-			$course_samples, $corpus, $corpus_type, $FEXTRACT,
-			$debug, $date_formatter, $pdtb, $pdtbfilepath, $print_format
-		) = @_;	
+			$course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
+			$debug, $pdtb, $pdtbfilepath, $print_format
+		) = @_;
 
 	my @courses = keys %{$course_samples};
 	my $num_threads_coursewise; 
 	my $num_interventions_coursewise;
 	
 	if (keys %{$course_samples} == 0){
-		die "\n Exception generateTrainingFile: course samples empty!!";
+		print $log "\n Exception generateTrainingFile: course samples empty!!";
+		print "\n Exception generateTrainingFile: course samples empty!!";
+		exit(0);
 	}
 	
 	#sanity checks
@@ -194,7 +196,8 @@ sub generateTrainingFile{
 		$terms		 = Model::getalltermIDF($dbh,$freqcutoff,0,$corpus);
 		#sanity check
 		if (keys %{$terms} == 0 ){
-			die "Exception: termIDFs are empty for $corpus_type. Check the tables and the query!\n @$corpus";
+			print "Exception: termIDFs are empty for $corpus_type. Check the tables and the query!\n @$corpus";
+			exit(0);
 		}
 	}
 	
@@ -213,8 +216,8 @@ sub generateTrainingFile{
 			}
 			
 			foreach my $courseid (keys %termFrequencies_part ){
-				foreach my $threadid (keys $termFrequencies_part{$courseid} ){
-					foreach my $termid (keys $termFrequencies_part{$courseid}{$threadid} ){
+				foreach my $threadid (keys %{$termFrequencies_part{$courseid}} ){
+					foreach my $termid (keys %{$termFrequencies_part{$courseid}{$threadid}} ){
 						if (!exists $termFrequencies{$courseid}{$threadid}{$termid}){
 							$termFrequencies{$courseid}{$threadid}{$termid} = 
 								$termFrequencies_part{$courseid}{$threadid}{$termid};
@@ -254,7 +257,8 @@ sub generateTrainingFile{
 		my $threads			=	$threadcats->{$category_id}{'threads'};
 		
 		if (!$lexical && !$lengthf){ 
-			print "\n Skipping $category_id due to no lexical lengthf or time feature calculations"; next; 
+			print $log "\n Skipping $category_id due to no lexical lengthf or time feature calculations"; 
+			next; 
 		}
 		
 		my $postqry = "select id,post_text,original from $posttable 
@@ -305,6 +309,7 @@ sub generateTrainingFile{
 			
 			#skip thread that do not have any posts
 			if ( (keys %$posts) == 0 ) { 
+				print LOG "\n cat-$category_id tab-$posttable cmttab-$commenttable";
 				print LOG "Empty thread: $courseid $threadid $docid \n"; 
 				next;	
 			}
@@ -317,7 +322,7 @@ sub generateTrainingFile{
 			
 			if($numposts{$docid} == 0 || $threadPostlength{$docid} == 0){
 				print "\n Sanity check failed! $numposts{$docid} \t " . (keys %$posts);
-				print LOG "\n Sanity check failed! $numposts{$docid} \t " . (keys %$posts); exit(0);
+				print $log "\n Sanity check failed! $numposts{$docid} \t " . (keys %$posts); exit(0);
 			}
 			
 			$thread_length{$docid} = @{$dbh->selectcol_arrayref("select sum(length(post_text)) from $posttable where 
@@ -389,14 +394,14 @@ sub generateTrainingFile{
 				close $SENSE_FILE;
 				
 				#normalisation by sum of number of posts and comments
-				foreach my $relation (sort keys $pdtbrelation{$docid}){
+				foreach my $relation (sort keys %{$pdtbrelation{$docid}}){
 					$pdtbrelation{$docid}{$relation} = 
 						$pdtbrelation{$docid}{$relation}  / $numposts{$docid};
 				}
 				
 				# make pdtb densities: birelations
 				if($pdtbrelation{$docid}{'biall'} > 0){
-					foreach my $relation (sort keys $pdtbrelation{$docid}){
+					foreach my $relation (sort keys %{$pdtbrelation{$docid}}){
 						if(	$relation =~ /den$/){
 							$pdtbrelation{$docid}{ $relation} = 
 							$pdtbrelation{$docid}{ $relation }/$pdtbrelation{$docid}{'biall'};
@@ -509,9 +514,6 @@ sub generateTrainingFile{
 			my $thread_length_nomalizer = $thread_length{$docid};
 
 			if($pdtb){
-				# if (!defined $pdtbrelation{$docid}{'expansion'}) { 
-					# print "\n $docid \t $threadid \t $forumid_number";
-				# }
 				($maxpdtbexpansion, $minpdtbexpansion) 
 					= 	getMaxMin(	$pdtbrelation{$docid}{'expansion'},
 									$maxpdtbexpansion,
@@ -579,7 +581,7 @@ sub generateTrainingFile{
 		
 			if($courseref ){
 				if ($thread_length_nomalizer eq 0){
-					die "Exception:  $docid \t $courseid: $coursematerialterms{$docid} \n";
+					print $log "Warning:  $docid \t $courseid: $coursematerialterms{$docid} \n";
 				}
 				
 				if ( defined $coursematerialterms{$docid} ){
@@ -787,7 +789,8 @@ sub generateTrainingFile{
 											$tftype	#uses normalised tf without idf
 										);	
 		if (keys %{$termWeights} ==0 ){
-			print LOG "\n termweights matrix is empty "; exit(0);
+			print "\n Exception... termweights matrix is empty ";
+			print $log "\n Exception... termweights matrix is empty "; exit(0);
 		}
 	}
 	
@@ -813,13 +816,12 @@ sub generateTrainingFile{
 							or die " prepare for $cmntqry failed \n";		
 		
 		if (!defined $threads || scalar @$threads == 0){
-			print LOG "\n Warning: Second pass! No threads found $category_id";
-			print "\n Warning: Second pass! No threads found $category_id";
+			print $log "\n Exception: Second pass! No threads found $category_id";
+			print "\n Exception: Second pass! No threads found $category_id";
 			exit(0);
 		}
 		
-		print $FEXTRACT "Writing feature file for potentially " .
-											scalar(@$threads)	.
+		print $FEXTRACT "\n Writing feature file for potentially ". scalar(@$threads).
 												" threads\n";
 		foreach (@$threads){
 			my $threadid			= $_->[0];
@@ -844,7 +846,7 @@ sub generateTrainingFile{
 			
 			#skip thread that do not have any posts
 			if ( (keys %$posts) == 0 ) {
-				print LOG "\n $category_id $posttable $commenttable $threads";
+				print LOG "\n cat-$category_id tab-$posttable cmttab-$commenttable";
 				print LOG "\n Empty thread: $courseid $threadid $docid $forumname \n"; 
 				next;	
 			}
@@ -867,8 +869,7 @@ sub generateTrainingFile{
 				$term_vector = fetchTermVector($termWeights->{$courseid}{$threadid}, $debug);
 
 				if ( keys %$term_vector == 0 ){
-					#warn "\nterm_vector is empty! for $threadid in $courseid";
-					print $FEXTRACT "term_vector is empty! for $threadid in $courseid\n";
+					print LOG "term_vector is empty! for $threadid in $courseid\n";
 					next;
 				}
 			}
@@ -876,7 +877,7 @@ sub generateTrainingFile{
 			my $nontermfeaturecount = $maxtermfeaturecount;
 			
 			if($tprop){
-				#print "adding thread length feature..\n";
+				print $log "adding thread length feature..\n";
 				if ($threadPostlength{$docid} == 0 && $numposts{$docid} > 0){
 					print "\n Sanity check failed! Exiting...";
 					exit(0);
@@ -908,7 +909,6 @@ sub generateTrainingFile{
 			}
 			
 			if($unigrams){
-				##print "calling normalize for $threadid \t $courseid \t $label \t $docid \n";
 				$sum_of_squares = sumOfSquares( $term_vector );
 			
 				if ( $sum_of_squares == 0 || !defined $sum_of_squares ){
@@ -926,7 +926,7 @@ sub generateTrainingFile{
 			}
 
 		    if($pdtb){
-				#print "adding pdtb relation feature..\n";
+				print $log "adding pdtb relation feature..\n";
 				foreach my $relation ( sort keys %{$pdtbrelation{$docid}} ){
 					$nontermfeaturecount++;
 					#print "\n $docid \t $nontermfeaturecount \t $relation";
@@ -992,7 +992,7 @@ sub generateTrainingFile{
 			}
 
 			if($forumtype){
-				#print $log "\n adding forumtype feature.";
+				print $log "\n adding forumtype feature.";
 				my @forumtype_vector = @{encodeforumname($forumname)};
 				foreach my $code (@forumtype_vector){
 					$nontermfeaturecount++;
@@ -1007,7 +1007,7 @@ sub generateTrainingFile{
 			}
 
 			if($numw){
-				#print "\nadding num_words feature.";
+				print $log "\nadding num_words feature.";
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = 'numw:# words';
 				if(defined $thread_length{$docid}){
@@ -1021,7 +1021,7 @@ sub generateTrainingFile{
 			}
 			
 			if($numsentences){
-				#print $log "\n Adding num_sentences feature";
+				print $log "\n Adding num_sentences feature";
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = 'numw:# sentences';
 				if(defined $numsentences{$docid}){				
@@ -1053,7 +1053,7 @@ sub generateTrainingFile{
 			}
 	
 			if($courseref){
-				#print $log "\n adding courseref mention feature";
+				print $log "\n adding courseref mention feature";
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = 'courseref_all';
 				if(defined $coursematerialterms{$docid}){
@@ -1117,7 +1117,7 @@ sub generateTrainingFile{
 			}
 			
 			if($nonterm_courseref){
-				#print $log "\n adding nonterm_courseref mention feature";
+				print $log "\n adding nonterm_courseref mention feature";
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = 'urlref';
 				if(defined $num_urlref{$docid}){
@@ -1130,7 +1130,7 @@ sub generateTrainingFile{
 				if(defined $num_timeref{$docid}){
 					my $denom = $maxnum_timeref - $minnum_timeref;
 					my $normalised;
-					if ($denom != 0){
+					if ($denom > 0){
 						$normalised = ($num_timeref{$docid} - $minnum_timeref) / $denom;
 					}
 					else{
@@ -1144,7 +1144,7 @@ sub generateTrainingFile{
 				if(defined $num_urlrefinfirstpost{$docid}){
 					my $denom = $maxnum_urlreffirstpost - $minnum_urlreffirstpost;
 					my $normalised;
-					if ($denom != 0){
+					if ($denom > 0){
 						$normalised = ($num_urlrefinfirstpost{$docid} - $minnum_urlreffirstpost) / $denom;
 					}
 					else{
@@ -1175,7 +1175,7 @@ sub generateTrainingFile{
 			}
 						
 			if($affir){
-				#print $log "\n adding affir mention feature";
+				print $log "\n adding affir mention feature";
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = '#affirmations';
 				if(defined $affirmations{$docid}){
@@ -1200,6 +1200,7 @@ sub generateTrainingFile{
 			}
 			
 			if($agree){
+				print $log "\n adding agree feature";
 				$nontermfeaturecount++;
 				$nontermfeatures{$nontermfeaturecount} = '#agreedisagree';
 				if(defined $agreedisagree{$docid}){			
@@ -1447,12 +1448,12 @@ sub computeTFIDFs{
 	}
 	
 	foreach my $courseid ( keys %$termFrequencies ){
-		foreach my $threadid ( keys $termFrequencies->{$courseid} ){
+		foreach my $threadid ( keys %{$termFrequencies->{$courseid}} ){
 			my $maxtf_this_thread = $maxtf_thread->{$courseid}{$threadid};
-			if(keys $termFrequencies->{$courseid}{$threadid} == 0){
+			if(keys %{$termFrequencies->{$courseid}{$threadid}} == 0){
 				print "\n No terms found for $courseid \t $threadid";
 			}
-			foreach my $termid ( keys $termFrequencies->{$courseid}{$threadid} ){
+			foreach my $termid ( keys %{$termFrequencies->{$courseid}{$threadid}} ){
 				###tf
 				my $tf = $termFrequencies->{$courseid}{$threadid}{$termid};
 				
@@ -1468,7 +1469,6 @@ sub computeTFIDFs{
 				my $df		= $termIDFs->{$termid}{'sumdf'};
 				my $term	= $termIDFs->{$termid}{'term'};
 				my $num_courses_term = keys %{$term_course->{$termid}};
-				my $course_spread_factor = ($num_courses_term / $tot_num_courses);
 				my $idf = 0;
 				
 				if (!defined $term){
@@ -1485,12 +1485,7 @@ sub computeTFIDFs{
 				}
 				
 				if ($df == 0){	$idf = 0;	}
-				elsif($tot_num_threads==0 || $course_spread_factor ==0){
-					print "\n Zero exception:  \t $course_spread_factor \t $num_courses_term";
-				}
-				else{
-					$idf = $tot_num_threads / $df;
-				}
+				$idf = $tot_num_threads / $df;
 
 				###round off idf score to 3 decimal places
 				$idf = sprintf("%.3f", $idf);
@@ -1513,9 +1508,9 @@ sub getMaxThreadTF{
 	my ($termFrequencies) = @_;
 	my %maxtf = ();
 		foreach my $courseid ( keys %$termFrequencies ){
-			foreach my $threadid ( keys $termFrequencies->{$courseid} ){
+			foreach my $threadid ( keys %{$termFrequencies->{$courseid}} ){
 				my $maxtf = 0.0;
-				foreach my $termid ( keys $termFrequencies->{$courseid}{$threadid} ){
+				foreach my $termid ( keys %{$termFrequencies->{$courseid}{$threadid}} ){
 					my $thistf	= $termFrequencies->{$courseid}{$threadid}{$termid};
 					$maxtf		= ($thistf > $maxtf)?$thistf:$maxtf;
 				}
@@ -1710,9 +1705,11 @@ sub getAgreeDisagree{
 	
 	my $sentences = Preprocess::getSentences($original_text);
 	my $firstsentence;
-	
 	$firstsentence = $sentences->[0];
 	$text = $firstsentence;
+	if (!defined $text){
+		return 0;
+	}
 	
 	$text =~ s/\s+that\s*('s|is)/ <DEM> /g;
 	$text =~ s/you\s*('r|ar)e?/ <SPP> /g;
