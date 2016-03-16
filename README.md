@@ -52,4 +52,5 @@ The packages to install are:
 <li>Lingua::EN::Tagger</li>
 <li>Lingua::EN::PluralToSingular 'to_singular'</li>
 <li>Config::Simple</li>
+<li>File::Remove</li>
 </ul>
