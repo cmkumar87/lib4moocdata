@@ -92,10 +92,26 @@ while (my $line = <$rem_fh>){
 }
 close $rem_fh;
 
+my $forums;
+# my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
+
 open( my $log, ">$path/../logs/$progname.log") 
 		or die "\n Cannot open $path/../logs/$progname.log";
-		
-my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
+
+if(!defined $forum){		
+	opendir (my $dh, "$path/../$dbname"."_pdtbinput") 
+			or die "Cannot open directory $path/../$dbname"."_pdtbinput";
+	while(readdir $dh) {
+		if ( $_ =~ /^\.+/ || -f $_){
+			next;
+		}
+		push (@$forums, $_);
+	}
+	closedir $dh;
+}
+else{
+	push (@$forums, $forum);
+}
 
 if(!defined $forums || scalar @$forums eq 0){
 	print "Exception: forums empty. Chck db!";
@@ -107,19 +123,28 @@ foreach my $forum_id ( sort @$forums){
 	# and homework (aka. assignment) threads
 	#--------------debug------------#
 	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001 || $forum_id == 4) {	next;	}
-	my $threads	= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
+	# my $threads	= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
 	
-	if (keys %$threads < 1){ 	next;	}
+	my $threads;
+	opendir (my $dh, "$path/../$dbname"."_pdtbinput/$forumid") 
+			or die "Cannot open directory $path/../$dbname"."_pdtbinput/$forumid";
+	while(readdir $dh){
+		if ( -d $_ ){
+			next;
+		}
+		push (@$threads, $_);
+	}
+	closedir $dh;
 	
-	foreach my $thread_id (keys %$threads){
+	if (scalar @$threads < 1){ 	next;	}
+	
+	foreach my $thread_id (@$threads){
 		#check for removed files
 		if (exists $removed_files{$thread_id}){
 			next;
 		}
 		
-		my $forum_id = $threads->{$thread_id}{'forum_id'};
 		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
-		
 		my $txt_file_path = "$path/../$dbname"."_pdtbinput/$forum_id";
 		my $out_file_path = "$txt_file_path/output";
 		
@@ -190,6 +215,7 @@ foreach my $forum_id ( sort @$forums){
 			foreach my $post_counter (sort {$a <=> $b} keys %$post_spans){
 				my $bol = $post_spans->{$post_counter}{'bol'};
 				my $eol = $post_spans->{$post_counter}{'eol'};
+				print $log "\n bol-$bol \t eol-$eol \t $spans[0] \t $spans[1] \t $post_counter \t $post_ids{$post_counter}";
 				if ($spans[0] >= $bol && $spans[1] <= $eol){
 					print $FHOUT "$post_ids{$post_counter} \t $span_string";
 					last;
