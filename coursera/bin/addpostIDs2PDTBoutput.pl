@@ -223,26 +223,28 @@ close $log;
 print "\n ##Done##";
 
 sub getspans{
-	my ($thread_id,$txt_file_path,$out_file_path) = @_;
+	my ($thread_id,$txt_file_path) = @_;
 	my %post_spans = ();
 	open (my $ORIGFILE, "<$txt_file_path/$thread_id.txt") 
-					or die "\n Cannot open read file pdtbinput at $out_file_path \n $!";
+					or die "\n Cannot read file $txt_file_path/$thread_id.txt $!";
 	my $offset 			= 0;
 	my $post_counter	= 1;	
 	
-	my $odd_line 		= 1;
+	my $even_line = 1;
 	while (my $line = <$ORIGFILE>){
-		if( !$odd_line ){
+		if( !$even_line ){
 			$post_counter ++; 
-			$odd_line = 1;
+			$even_line = 1;
 		}
 		else{
+			#even line
 			my $bol  = $offset;
 			my $eol  = $bol + length($line);
 			$post_spans{$post_counter} = +{'bol' => $bol,'eol' => $eol};
-			$odd_line = 0;
+			$even_line = 0;
 		}
 		$offset += length($line);
+		$offset += 1; # for carriage return \n or \r
 	}	
 	close $ORIGFILE;
 	return \%post_spans;
