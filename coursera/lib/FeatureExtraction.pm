@@ -760,10 +760,6 @@ sub generateTrainingFile{
 		print "MAX & MIN pdtb c: $maxpdtbcontingency \t $minpdtbcontingency\n";
 		print "MAX & MIN pdtb com: $maxpdtbcontrast \t $minpdtbcontrast\n";
 		print "MAX & MIN pdtb tem: $maxpdtbtemporal \t $minpdtbtemporal\n";
-		# checkmaxminexception($maxprofmentions, $minprofmentions, 'profmentions');
-		# checkmaxminexception($maxavgprofmentions, $minavgprofmentions, 'avgprofmentions');
-		# checkmaxminexception($maxstaffmentions, $minstaffmentions, 'staffmentions');
-		# checkmaxminexception($maxavgstaffmentions, $minavgstaffmentions, 'staffavgmentions');
 	}
 	
 	my %nontermfeatures = ();
@@ -979,6 +975,7 @@ sub generateTrainingFile{
 						next;
 					}
 					else{
+						print $log "\n bad relation. $docid \t $nontermfeaturecount \t $relation";
 						print "\n bad relation. $docid \t $nontermfeaturecount \t $relation";
 						exit(0);
 					}

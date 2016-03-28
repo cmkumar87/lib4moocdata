@@ -172,7 +172,7 @@ my %instreplied			= ();
 my $serial_id			= 0;
 my $corpus_type			= undef;
 		
-my @additive_sequence	= (0,1,3,7,15,31,63);
+my @additive_sequence	= (0,1,3,7,15,31,63,127);
 my @ablation_sequence	= (-31,47,55,59,61);
 my @individual_features = (2,4,8,16,32);
 my @combined			= (0,1,3,7,15,31,63,-31,47,55,59,61,2,4,8,16,32,64);
@@ -181,7 +181,7 @@ my @uni_plus_forumtype	= (0,1);
 my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
-my @iterations			= (0,1,3,7,15,31,63);
+my @iterations			= (32,64,125,127);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){

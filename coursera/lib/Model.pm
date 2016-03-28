@@ -31,7 +31,7 @@ sub getDBHandle{
 	elsif($dbtype eq 'mysql'){
 		#mysql
 		$uname  = 'root';
-		$pswd   = 'root';
+		$pswd   = '';
 		if(!defined $dbname){
 			$dbname = 'coursera_dump';
 		}
