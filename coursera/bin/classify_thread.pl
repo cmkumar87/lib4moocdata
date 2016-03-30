@@ -51,7 +51,6 @@ my $help		= 0;
 my $quite		= 0;
 my $debug		= 0;
 my $interactive = 0;
-my $corpus_name	= undef;
 my $num_folds	= undef;
 my $indir		= undef;
 my $in1 		= undef;
@@ -60,16 +59,17 @@ my $stem 		= 0;
 my $weighing 	= 'none';
 my $test 		= 0;
 my $pilot 		= 0;
+my $dbname		= undef;
 my $incourse;
 
 $help = 1 unless GetOptions(
+				'dbname=s'	=>	\$dbname,
 				'folds=i'	=>	\$num_folds,
 				'in1=s'		=>	\$in1,
 				'in2=s'		=>	\$in2,
 				'indir=s'	=>	\$indir,
 				'stem'		=>	\$stem,
 				'i'			=>	\$interactive,
-				'corpus=s'	=>	\$corpus_name,
 				'w=s'		=>	\$weighing,
 				'test'		=>	\$test,
 				'pilot'		=>	\$pilot,
@@ -85,9 +85,9 @@ if ( ( $help || !defined $num_folds ||  !defined $in1 || !defined $in2) && (!def
 
 
 # Secure database connection as a global variable
-my $dbh 				= Model::getDBHandle("$path/../data/testdb",undef,undef,'cs6207.db');
+my $dbh 				= Model::getDBHandle("$path/../data/",undef,undef,$dbname);
 
-my $experiments_path	= $path . "/../experiments/coursewise/$indir";
+my $experiments_path	= $path . "/../experiments/$indir";
 my $results_path		= $experiments_path."/results";
 
 my $counter = 0;
@@ -113,75 +113,6 @@ my $basename	= (split(/_train_/,$in1))[0];
 my $model_file = "$experiments_path/models/$basename.model";
 my %foldwise_contingency_matrix = ();
 my @courses;
-if ($corpus_name eq 'd61'){
-	 @courses	= (	
-						'acoustics1-001', 
-						'advancedchemistry-001',
-						'amnhearth-002',
-						'analyze-001',
-						'androidapps101-001',
-						'automata-002',
-						###'ccss-math1-002',
-						# 'compmethods-003',
-						'cosmo-003',
-						############### 'crypto-010',
-						###'diabetes-001',
-						# 'dynamicalmodeling-001',
-						###'dynamics1-001',
-						'edc-002',
-						'exdata-002',
-						##############'friendsmoneybytes-004',
-						'functionalanalysis-001',
-						'gamification-003',
-						##############'ggp-002',
-						'globalwarming-002',
-						##############'howthingswork1-002',
-						'improvisation-005',
-						'informationtheory-001',
-						# 'innovativeideas-009',
-						'intrologic-003',
-						'maps-002',
-						##############'marriageandmovies-001',
-						'modernmiddleeast-001',
-						##############'nanotech-001',
-						##############'netsysbio-001',
-						'networksonline-001',
-						'neuralnets-2012-001',
-						# 'newnordicdiet-002',
-						'nlangp-001',
-						'optimization-002',
-						'organalysis-003',
-						'pgm-003',
-						###'pkubioinfo-002',
-						'reactive-001',
-						###'repdata-002',
-						'sciwrite-2012-001',
-						'sna-2012-001',
-						'solarsystem-001',
-						##############'statinference-002',
-						##############'virtualassessment-001',
-						'warhol-001',		
-						'matrix-001'
-			);
-}
-elsif ($corpus_name eq 'd14'){ 
-	@courses	= (	
-					'ml-005',			
-					'rprog-003',			
-					'calc1-003',
-					'smac-001',		
-					'compilers-004',			
-					'maththink-004',
-					'bioelectricity-002',	
-					'gametheory2-001',	
-					'musicproduction-006',	
-					'medicalneuro-002',
-					'comparch-002',			
-					# 'biostats-005',			
-					'bioinfomethods1-001',
-					'casebasedbiostat-002'
-				 );
-}
 
 # my $courseidqry = "select docid,courseid from thread ";
 # $courseidqry = Model::appendListtoQuery($courseidqry, \@courses, ' courseid ', ' where ');
@@ -208,7 +139,7 @@ if(defined $corpus_name){
 }
 my %docid_to_courseid = ();
 
-open (my $result_file, ">$results_path"."/results_".$basename."_".$corpus_name.".txt") 
+open (my $result_file, ">$results_path"."/results_".$basename.".txt") 
 	or die "cannot open $results_path/results....txt";
 # print header	
 print $result_file "\n FOLD \t # of samples \t P \t R \t F_1 \t +Train% \t idenC_train \t idenC_test \t FPR \t";
@@ -219,16 +150,8 @@ open (my $con_matrices_file, ">$results_path"."/matrices_".$basename."_".$corpus
 # print header
 print $con_matrices_file "Course \t Weight \t True +ve \t True -ve \t False +ve \t False -ve \n";
 
-# open (my $output_fh, ">$results_path"."/results_dtl_".$basename."_".$corpus_name)
-	# or die "cannot open $experiments_path/results....txt";
-
 my $terms;
-if ($test){
-	$terms = Model::getalltermIDF($dbh,undef,0,['TOYCOURSE'],0);
-}
-else{
-	$terms = Model::getalltermIDF($dbh,undef,0,\@courses,0);
-}
+$terms = Model::getalltermIDF($dbh,undef,0,\@courses,0);
 
 foreach my $i (0..($num_folds-1)){
 	my $weight		= 1;
@@ -237,8 +160,6 @@ foreach my $i (0..($num_folds-1)){
 	print $con_matrices_file "\n $courses[$i] \t";
 	my $lastname	= (split(/_train/,$in1))[1];
 	$lastname =~ s/(\_).*\.?(txt)/$1$courses[$i].$2/;
-	
-	# print "\n $lastname"; next;
 	
 	my $training_data_file	= "$experiments_path/".$basename."_train".$lastname;
 	my $test_data_file		= "$experiments_path/".$basename."_test".$lastname;
@@ -266,7 +187,6 @@ foreach my $i (0..($num_folds-1)){
 
 	print "#samples: $number_of_samples \t # Folds: $num_folds \n";
 
-	# print $result_file " # sample: $number_of_samples \t #folds: $num_folds \n";	
 	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_".$courses[$i].".txt") 
 		or die "cannot open $experiments_path/results....txt";
 	
@@ -388,7 +308,6 @@ foreach my $i (0..($num_folds-1)){
 	$foldwise_contingency_matrix{$i} = $matrix;
 		
 	printContigencyMatrix($matrix, $con_matrices_file);
-	#savedetailedouput(\%foldoutput, $test_data, $output_fh, 1);
 	savedetailedouput(\%foldoutput, $test_data, $output_fold_fh, 1);
 	
 	$precision{$i}	= sprintf ("%.3f", getPrecision($matrix) * 100 );
@@ -439,8 +358,6 @@ foreach my $i (0..($num_folds-1)){
 		
 	print $result_file "\n $courses[$i] \t $number_of_samples \t $precision{$i}\t $recall{$i} \t $f1{$i}";
 	
-	# print $result_file "\t F_1:$f1{$i} \t F_2:$f2{$i} \t F_4:$f4{$i}";
-	
 	print $result_file "\t $training_positive ";
 	print $result_file "\t $i_denC_train{$i}\t $i_denC_test{$i}\t $fpr\t";
 	
@@ -449,7 +366,6 @@ foreach my $i (0..($num_folds-1)){
 	
 	print $result_file "\t $num_pos_samples ";
 	print $result_file "\t $num_neg_samples ";
-	# print $result_file "\n \t P_at_100R:$p_at_100r\t F1_at_100R:$f1_at_100r\t F4_at_100R:$f4_at_100r \t ";
 	print $result_file "\n at_100 \t \t $p_at_100r \t 100 \t $f1_at_100r\t \n";
 
 	print "\n";
@@ -465,7 +381,7 @@ my $p_f1	= sprintf( "%.3f", ((2*$p_avg*$p_rec)/(1*$p_avg+$p_rec)));
 my $p_f2	= sprintf( "%.3f", ((5*$p_avg*$p_rec)/(4*$p_avg+$p_rec)));
 my $p_f4	= sprintf( "%.3f", ((17*$p_avg*$p_rec)/(16*$p_avg+$p_rec)));
 #my $numerator =  (1+($beta*$beta)) * ($precision*$recall);
-#my $denom = ($beta*$beta*$precision)+$recall;
+#my $denom  = ($beta*$beta*$precision)+$recall;
 #my $p_f1	= sprintf( "%.3f", average(\%f1) );
 #my $p_f2	= sprintf( "%.3f", average(\%f2) );
 #my $p_f4	= sprintf( "%.3f", average(\%f4) );
@@ -483,14 +399,9 @@ $p_rec	= sprintf( "%.3f", weightedAverage(\%recall,\%foldsize) );
 $p_f1	= sprintf( "%.3f", ((2*$p_avg*$p_rec)/(1*$p_avg+$p_rec)));
 $p_f2	= sprintf( "%.3f", ((5*$p_avg*$p_rec)/(4*$p_avg+$p_rec)));
 $p_f4	= sprintf( "%.3f", ((17*$p_avg*$p_rec)/(16*$p_avg+$p_rec)));
-#$p_f1	= sprintf( "%.3f", weightedAverage(\%f1,\%foldsize) );
-#$p_f2	= sprintf( "%.3f", weightedAverage(\%f2,\%foldsize) );
-#$p_f4	= sprintf( "%.3f", weightedAverage(\%f4,\%foldsize) );
 
 print $result_file "\nWeighted Macro Average over $num_folds folds: " ;
 print $result_file "\n----------------------------------------------------------------";
-# print $result_file "\n  P    \t   R    \t   F_1  \t   F_2    \t   F_4   \n" ;
-# print $result_file "\n $p_avg \t $p_rec \t $p_f1	\t $p_f2 \t $p_f4\n" ;
 print $result_file "\n  P    \t   R    \t   F_1  \n" ;
 print $result_file "\n $p_avg \t $p_rec \t $p_f1 \n" ;
 print $result_file "\n----------------------------------------------------------------\n";
@@ -503,13 +414,10 @@ $p_f4	= sprintf( "%.3f", microAverageF_m(\%foldwise_contingency_matrix,4) * 100)
 
 print $result_file "\n Micro Average over $num_folds folds: " ;
 print $result_file "\n----------------------------------------------------------------";
-# print $result_file "\n  P    \t   R    \t   F_1  \t   F_2    \t   F_4   \n" ;
-# print $result_file "\n$p_avg \t $p_rec \t $p_f1	\t $p_f2 \t $p_f4\n" ;
 print $result_file "\n  P    \t   R    \t   F_1 \n" ;
 print $result_file "\n$p_avg \t $p_rec \t $p_f1	\n" ;
 print $result_file "\n----------------------------------------------------------------\n";
 
-# compute_weighted_micro_avg(\%foldwise_contingency_matrix, \%foldsize);
 $p_avg	= sprintf( "%.3f", microAveragedPrecision(\%foldwise_contingency_matrix) * 100);
 $p_rec	= sprintf( "%.3f", microAveragedRecall(\%foldwise_contingency_matrix) * 100);
 $p_f1	= sprintf( "%.3f", microAverageF_m(\%foldwise_contingency_matrix,1) * 100); 
@@ -518,8 +426,6 @@ $p_f4	= sprintf( "%.3f", microAverageF_m(\%foldwise_contingency_matrix,4) * 100)
 
 print $result_file "\nWeighted Micro Average over $num_folds folds: " ;
 print $result_file "\n----------------------------------------------------------------";
-# print $result_file "\n  P    \t   R    \t   F_1  \t   F_2    \t   F_4   \n" ;
-# print $result_file "\n$p_avg \t $p_rec \t $p_f1	\t $p_f2 \t $p_f4\n" ;
 print $result_file "\n  P    \t   R    \t   F_1 \n" ;
 print $result_file "\n$p_avg \t $p_rec \t $p_f1	\n" ;
 print $result_file "\n----------------------------------------------------------------\n";
