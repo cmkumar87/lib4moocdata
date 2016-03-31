@@ -483,13 +483,15 @@ foreach my $type ("test","training"){
 
 			print $log "\n +ve samples:  $samplecount{'+1'} ";
 			print $log "\n -ve samples:  $samplecount{'-1'} ";
-			print $log "\n ##Done $type";
+			print $log "\n ##Done $itere";
 			
 			print "\n +ve samples:  $samplecount{'+1'} ";
 			print "\n -ve samples:  $samplecount{'-1'} ";
-			print "\n ##Done $type";
+			print "\n ##Done  $iter";
 		}
 	}
+	print $log "\n ##Done $type";
+	print "\n ##Done $type";
 }
 
 print "\n ##Done##";

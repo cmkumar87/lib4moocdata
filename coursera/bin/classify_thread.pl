@@ -64,6 +64,7 @@ my $incourse;
 
 $help = 1 unless GetOptions(
 				'dbname=s'	=>	\$dbname,
+				'course=s'	=>	\$incourse,
 				'folds=i'	=>	\$num_folds,
 				'in1=s'		=>	\$in1,
 				'in2=s'		=>	\$in2,
@@ -78,19 +79,32 @@ $help = 1 unless GetOptions(
 				'q' 		=>	\$quite
 			);
 
-if ( ( $help || !defined $num_folds ||  !defined $in1 || !defined $in2) && (!defined $corpus_name) ){
+if ( ( $help || !defined $num_folds ||  !defined $in1 || !defined $in2)){
 	Help();
 	exit(0);
 }
 
 
 # Secure database connection as a global variable
-my $dbh 				= Model::getDBHandle("$path/../data/",undef,undef,$dbname);
+# my $dbh 				= Model::getDBHandle("$path/../data/",undef,undef,$dbname);
 
-my $experiments_path	= $path . "/../experiments/$indir";
-my $results_path		= $experiments_path."/results";
+my $experiments_path;
 
-my $counter = 0;
+if(defined $indir){
+	$experiments_path	.= "$path/../experiments/$indir";
+}
+else{
+	$experiments_path	.= "$path/../experiments/$incourse";
+}
+my $results_path		 = "$experiments_path/results";
+
+if(! -d $results_path){
+	mkdir($results_path);
+}
+
+if(! -d "$experiments_path/models"){
+	mkdir("$experiments_path/models");
+}
 
 my %output 			= ();
 my %output_details	= ();
@@ -107,51 +121,42 @@ my $weight_optimization_search_step = 0.1;
 my $training_time 	= 0;
 my $testing_time 	= 0;
 
-my $basename	= (split(/_train_/,$in1))[0];
+my $basename	= (split(/_training_/,$in1))[0];
 
 #learnt model is written to this model file
 my $model_file = "$experiments_path/models/$basename.model";
+
 my %foldwise_contingency_matrix = ();
 my @courses;
 
-# my $courseidqry = "select docid,courseid from thread ";
-# $courseidqry = Model::appendListtoQuery($courseidqry, \@courses, ' courseid ', ' where ');
-# my $courseids = $dbh->selectall_hashref($courseidqry,'docid');
-
-# if($corpus_name eq 'pilot'){
-	# $courseids = {'ml-005' => 1};
-# }
-
-# sanity check
-# if(!defined $courseids || keys (%$courseids) == 0){
-    # die "Exception: course hashref not defined!";
-# }
+if(defined $incourse){
+	push(@courses, $incourse);
+}
 
 my $num_courses = scalar @courses;
 if($num_courses == 0){
-	die "Exception: zero courses found! Check data file and the course database.\n";
+	print "Exception: zero courses found! Check data file.\n"; exit(0);
+	
 }
 
-print "\n Number of courses idendified in this dataset: $num_courses \n";
+print $log "\n Number of courses idendified in this dataset: $num_courses \n";
 
-if(defined $corpus_name){
-	$num_folds = $num_courses;
-}
+my $counter = 0;
 my %docid_to_courseid = ();
 
-open (my $result_file, ">$results_path"."/results_".$basename.".txt") 
-	or die "cannot open $results_path/results....txt";
+open (my $result_file, ">$results_path/results_$basename.txt") 
+	or die "cannot open $results_path/results_$basename.txt for writing";
 # print header	
-print $result_file "\n FOLD \t # of samples \t P \t R \t F_1 \t +Train% \t idenC_train \t idenC_test \t FPR \t";
+print $result_file "FOLD \t # of samples \t P \t R \t F_1 \t +Train% \t idenC_train \t idenC_test \t FPR \t";
 print $result_file "Train_+ve \t Train_-ve \t Test_+ve \t Test_-ve";
 	
-open (my $con_matrices_file, ">$results_path"."/matrices_".$basename."_".$corpus_name.".txt") 
+open (my $con_matrices_file, ">$results_path/matrices_$basename.txt") 
 	or die "cannot open $results_path/results....txt";
 # print header
 print $con_matrices_file "Course \t Weight \t True +ve \t True -ve \t False +ve \t False -ve \n";
 
 my $terms;
-$terms = Model::getalltermIDF($dbh,undef,0,\@courses,0);
+# $terms = Model::getalltermIDF($dbh,undef,0,\@courses,0);
 
 foreach my $i (0..($num_folds-1)){
 	my $weight		= 1;
@@ -161,7 +166,7 @@ foreach my $i (0..($num_folds-1)){
 	my $lastname	= (split(/_train/,$in1))[1];
 	$lastname =~ s/(\_).*\.?(txt)/$1$courses[$i].$2/;
 	
-	my $training_data_file	= "$experiments_path/".$basename."_train".$lastname;
+	my $training_data_file	= "$experiments_path/".$basename."_training".$lastname;
 	my $test_data_file		= "$experiments_path/".$basename."_test".$lastname;
 	
 	print "\n Training Data File: $training_data_file ";
