@@ -41,13 +41,13 @@ sub License{
 
 sub Help{
 	print STDERR "Usage: $progname -h\t[invokes help]\n";
-  	print STDERR "       $progname -n [-dbname -mode -cutoff -stem
+  	print STDERR "       $progname -n -dbname -course [-allf -uni -cutoff -stem
 										-tftype	-tprop -forumtype		
 										-courseref	-affir		
-										-nums	-q	]\n";
+										-nums -pdtb -agree  -q	]\n";
 	print STDERR "Options:\n";
-	print STDERR "\t-n	\t Number of instances to sample. \n";
-	print STDERR "\t-mode \t all: sample  +ve and -ve. \n\t\t ne: sample -ve. \n\t\t po: sample +ve. \n";
+	print STDERR "\t-folds number of cross-validation folds \n";
+	print STDERR "\t-dbname database name \n";
 	print STDERR "\t-cutoff \t Include only terms that have occured in atlest n documents. \n";
 	print STDERR "\t-tftype[bool|pure|log] \n";
 	print STDERR "\t-q \t Quiet Mode (don't echo license).\n";
@@ -125,7 +125,7 @@ if ( $help ){
 }
 
 if ( !defined $num_folds){
-	print "\n some undef";
+	print "\n number of foldes is undefined";
 	Help();	
 	exit(0);
 }
@@ -483,7 +483,7 @@ foreach my $type ("test","training"){
 
 			print $log "\n +ve samples:  $samplecount{'+1'} ";
 			print $log "\n -ve samples:  $samplecount{'-1'} ";
-			print $log "\n ##Done $itere";
+			print $log "\n ##Done $iter";
 			
 			print "\n +ve samples:  $samplecount{'+1'} ";
 			print "\n -ve samples:  $samplecount{'-1'} ";
