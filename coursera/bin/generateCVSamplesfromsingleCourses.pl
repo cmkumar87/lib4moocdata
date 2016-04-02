@@ -185,6 +185,7 @@ my @iterations			= (1,2,4,8,16,3,7,15,31,63);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
+	print "\n\n Did you forget to switch 'allf' on?";
 	print $log "\n\n Did you forget to switch 'allf' on?";
 	Help();
 	exit(0);
