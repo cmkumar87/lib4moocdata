@@ -201,11 +201,6 @@ my $tmp_file 		= "$path/../tmp_file/tmp_samples_$courseid";
 # CREATE MULTIPLE TEST AND TRAINING DATASETS FROM THE OVERALL
 # LIST OF ALL COURSES
 
-my %datasets				= ();
-my %course_samples 			= ();
-my %allthreads 				= ();
-my %held_out_data_keys		= ();
-
 my $num_courses 			= 1;
 
 my $threadsquery = 	"select docid, courseid, id, 
@@ -226,6 +221,12 @@ my $corpus;
 foreach my $course (@$courses){
 	push (@$corpus, $course);
 }
+
+my %datasets				= ();
+my %course_samples 			= ();
+my %posthreads 				= ();
+my %negthreads 				= ();
+my %held_out_data_keys		= ();
 
 #add all threads in the corpus 
 foreach my $courseid (@$corpus){
@@ -265,7 +266,7 @@ if (keys %course_samples != scalar @$corpus ){
 	exit(0);
 }
 
-#add the threads (%allthreads)
+#add the threads
 foreach my $courseid (@$courses){
 	my $forums = $dbh->selectall_arrayref("select id, forumname from forum
 											where courseid =\'$courseid\' 
@@ -301,38 +302,58 @@ foreach my $courseid (@$courses){
 				die "forumaname is null for $docid \n";
 			}
 			
-			$allthreads{$serial_id} = [$courseid,$threadid,$forumname,$forumidnumber,$serial_id];
-			$docid_to_serialid{$serial_id} = $docid;	
-			if ($inst_replied) { $instreplied{$serial_id} = 1; } 
+			if ($inst_replied) {
+				$posthreads{$serial_id} = [$courseid,$threadid,$forumname,$forumidnumber,$serial_id];
+				$instreplied{$serial_id} = 1;
+			}
+			else{
+				$negthreads{$serial_id} = [$courseid,$threadid,$forumname,$forumidnumber,$serial_id];
+			}
+			
+			$docid_to_serialid{$serial_id} = $docid;
 			$serial_id ++;
 		}
 		print $log "\n $courseid \t $forumidnumber\t" . (keys %allthreads) ." threads";
 	}
 }
 
-if (keys %allthreads == 0 ){
-	print "\nException: No threads found!";
+if (keys %posthreads == 0 ){
+	print "\nException: No + ve threads found!";
 	exit(0);
 }
-if ($num_folds > (keys %allthreads)){
-	print "\nException: Num_folds:$num_folds is greater number of courses: " . (keys %allthreads) ." \n";
+
+if (keys %negthreads == 0 ){
+	print "\nException: No - ve threads found!";
+	exit(0);
+}
+
+if ($num_folds > ( ((keys %posthreads) + (keys %negthreads)) ){
+	print "\nException: Num_folds:$num_folds is greater number of courses: " . 
+	((keys %posthreads) + (keys %negthreads)) ." \n";
 	Help();
 	exit(0);
 }
 
-my $max_thread_sample_id = keys %allthreads;
-
-my $fold_size = int($max_thread_sample_id / $num_folds);
-print $log "\nNum folds: $num_folds \t Fold size: $fold_size \t \n";
-
 ####################*******************#######################
 for(my $index = $start_index; $index < $end_index; $index ++){
-	my $training_set;
-	my $test_set;	
-
-	($training_set, $test_set) = getTrainTestCourseSetsCV($index, $fold_size, \%allthreads);
-	print "\n generateCVSamplesfromsingleCourses: test and training for fold $index done";
+	my $max_posthread_sample_id = keys %posthreads;
+	my $max_negthread_sample_id = keys %negthreads;
 	
+	my $posfold_size = int($max_posthread_sample_id / $num_folds);
+	my $negfold_size = int($max_negthread_sample_id / $num_folds);
+	print $log "\nNum folds: $num_folds \t Fold size: $posfold_size \t \n";
+	print $log "\nNum folds: $num_folds \t Fold size: $negfold_size \t \n";
+
+	my $postraining_set;
+	my $postest_set;	
+	my $negtraining_set;
+	my $negtest_set;	
+	
+	($postraining_set, $postest_set) = getTrainTestCourseSetsCV($index, $posfold_size, \%posthreads);
+	($negtraining_set, $negtest_set) = getTrainTestCourseSetsCV($index, $negfold_size, \%negthreads);
+	print "\n generateCVSamplesfromsingleCourses: test and training for fold $index done";
+	my $training_set = mergePositivenNegativeSets($postraining_set, $negtraining_set);
+	my $test_set	 = mergePositivenNegativeSets($postest_set, $negtest_set);
 	$datasets{"training$index"} =  $training_set;
 	$datasets{"test$index"}  	=  $test_set;
 }
@@ -402,12 +423,12 @@ foreach my $type ("test","training"){
 			foreach my $serial_id (@$dataset){
 				
 				if ( !exists $samples{$serial_id} ) {
-						if (!exists $instreplied{$serial_id} ){					
-							addtosample(\%allthreads, $serial_id, '-1', \@negativethreads, \%samples);
+						if (!exists $instreplied{$serial_id} ){
+							addtosample(\%negthreads, $serial_id, '-1', \@negativethreads, \%samples);
 							$samplecount{'-1'}++;
 						}
 						else{
-							addtosample(\%allthreads, $serial_id, '+1', \@positivethreads, \%samples);
+							addtosample(\%posthreads, $serial_id, '+1', \@positivethreads, \%samples);
 							$samplecount{'+1'}++;
 						}
 				}
@@ -499,6 +520,14 @@ print "\n ##Done##";
 print $log "\n ##Done##";
 close $log;
 Utility::exit_script($progname,\@ARGV);
+
+sub mergePositivenNegativeSets{
+	my ($pos_set, $neg_set) = @_;
+	my @dataset;
+	push (@dataset, @$pos_set);
+	push (@dataset, @$neg_set);
+	return \@dataset;
+}
 
 sub getTrainTestCourseSetsCV{
 		my($fold, $fold_size, $data) = @_;
