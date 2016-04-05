@@ -181,7 +181,7 @@ my @uni_plus_forumtype	= (0,1);
 my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
-my @iterations			= (1,2,4,8,16,3,7,15,31,63);
+my @iterations			= (1);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -313,7 +313,8 @@ foreach my $courseid (@$courses){
 			$docid_to_serialid{$serial_id} = $docid;
 			$serial_id ++;
 		}
-		print $log "\n $courseid \t $forumidnumber\t" . (keys %allthreads) ." threads";
+		print $log "\n $courseid \t $forumidnumber\t" . (keys %posthreads) ." + ve threads";
+		print $log "\n $courseid \t $forumidnumber\t" . (keys %negthreads) ." - ve threads";
 	}
 }
 
@@ -327,9 +328,10 @@ if (keys %negthreads == 0 ){
 	exit(0);
 }
 
-if ($num_folds > ( ((keys %posthreads) + (keys %negthreads)) ){
-	print "\nException: Num_folds:$num_folds is greater number of courses: " . 
-	((keys %posthreads) + (keys %negthreads)) ." \n";
+my $thread_totals = (keys %posthreads) + (keys %negthreads);
+
+if ($num_folds > $thread_totals ){
+	print "\nException: Num_folds:$num_folds is greater number of courses: $thread_totals \n";
 	Help();
 	exit(0);
 }
@@ -341,8 +343,8 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 	
 	my $posfold_size = int($max_posthread_sample_id / $num_folds);
 	my $negfold_size = int($max_negthread_sample_id / $num_folds);
-	print $log "\nNum folds: $num_folds \t Fold size: $posfold_size \t \n";
-	print $log "\nNum folds: $num_folds \t Fold size: $negfold_size \t \n";
+	print $log "\n+ve threads Num folds: $num_folds \t Fold size: $posfold_size \t ";
+	print $log "\n-ve threads Num folds: $num_folds \t Fold size: $negfold_size \t ";
 
 	my $postraining_set;
 	my $postest_set;	
@@ -525,6 +527,11 @@ sub mergePositivenNegativeSets{
 	my ($pos_set, $neg_set) = @_;
 	my @dataset;
 	push (@dataset, @$pos_set);
+	# my $max_pos_id  = (scalar @$pos_set) - 1;
+	
+	# foreach $seriad_id (@$neg_set){
+		# $max_pos_id + $seriad_id;
+	# }
 	push (@dataset, @$neg_set);
 	return \@dataset;
 }
@@ -533,6 +540,7 @@ sub getTrainTestCourseSetsCV{
 		my($fold, $fold_size, $data) = @_;
 		
 		my $num_data_points = keys %$data;
+		my @data_points		= keys %$data;
 		
 		my $testset_start	= $fold * $fold_size;
 		my $testset_end		= $testset_start + $fold_size-1;
@@ -546,32 +554,32 @@ sub getTrainTestCourseSetsCV{
 		print $log  "\n TRAINING SET INDICES: $trainingset_start \t $trainingset_end ";
 		print $log  "\n TESTING SET INDICES: $testset_start \t $testset_end";
 		
-		print $log "\nTRAINING COURSES: ";
+		# print $log "\nTRAINING COURSES: ";
 		my @trainingset; 
 		my @testset;
 		if($trainingset_start > $trainingset_end){
 			foreach my $j ($trainingset_start..($num_data_points-1),0..$trainingset_end){
-				push (@trainingset, $j);
+				push (@trainingset, $data_points[$j]);
 				# print $log "$j: $courses->{$j} \t";
 			}
 		}
 		else{
 			foreach my $j ($trainingset_start..$trainingset_end){
-				push (@trainingset, $j);
+				push (@trainingset, $data_points[$j]);
 				# print $log "$j: $courses->{$j} \t";
 			}	
 		}
 		
-		print $log "\nTESTING COURSES: ";
+		# print $log "\nTESTING COURSES: ";
 		if($testset_start > $testset_end){
 			foreach my $j ($testset_start..($num_courses-1),0..$testset_end){
-				push (@testset, $j);
+				push (@testset, $data_points[$j]);
 				# print $log "$j: $courses->{$j} \t";
 			}
 		}
 		else{
 			foreach my $j ($testset_start..$testset_end){
-				push (@testset, $j);
+				push (@testset, $data_points[$j]);
 				# print $log "$j: $courses->{$j} \t";
 			}
 		}
