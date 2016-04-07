@@ -78,10 +78,10 @@ if(!defined $dbh){
 	print "Exception. Db handle is undefined"; exit(0);
 }
 
-if(defined $dbname){
+if(defined $dbname && !defined $courseid){
 	$courseid = $dbname;
 }
-elsif(defined $dbname){
+elsif(defined $courseid && !defined $dbname ){
 	$dbname	= $courseid;
 }
 
@@ -93,7 +93,7 @@ if(!defined $courseid && !defined $dbname){
 	exit(0);
 }
 
-chdir("$dbname"."_pdtbinput");
+chdir("$courseid"."_pdtbinput");
 system("cd");
 
 #hashmap of removed files
@@ -118,14 +118,20 @@ foreach my $forum_id ( sort @$forums){
 		print "Exception. forum_id is undefined for $courseid"; 
 	}
 	
-	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001) {	next;	}
+	# we are only interested in threads from lecture, exam, errata 
+	# and homework (aka. assignment) threads
+	## to do need to make a forum.ignorelist file and delete the foll line of code
+	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001 || $forum_id == 4) {	next;	}
+	
 	my $threads		= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
 	# my $threads	= $dbh->selectall_hashref("select * from thread where forumid = $forum_id and courseid = \'$courseid\'", 'id');
 	
 	if (keys %$threads < 1){ 	next;	}
 	
 	foreach my $thread_id (keys %$threads){
-		#check for removed files
+		#check for removed threads / files
+		#these are threads / files omitted due to some unparsable text in them
+		#failing in the PDTB parser pipeline
 		if (exists $removed_files{$thread_id}){
 			next;
 		}
