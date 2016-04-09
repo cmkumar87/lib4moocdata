@@ -181,7 +181,9 @@ my @uni_plus_forumtype	= (0,1);
 my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
-my @iterations			= (1);
+my @edm 				= (31);
+my @proposed			= (32, 64, 63, 127);
+my @iterations			= (31, 32, 64, 63, 127);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){

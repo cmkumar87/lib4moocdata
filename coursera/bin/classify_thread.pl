@@ -84,9 +84,12 @@ if ( ( $help || !defined $num_folds ||  !defined $in1 || !defined $in2)){
 	exit(0);
 }
 
-
 # Secure database connection as a global variable
-# my $dbh 				= Model::getDBHandle("$path/../data/",undef,undef,$dbname);
+my $dbh		= undef;
+# my $dbh 	= Model::getDBHandle("$path/../data/",undef,undef,$dbname);
+
+open (my $log, ">$path/../logs/$progname.log")
+	or die "cannot open $path/../logs/$progname.log for writing";
 
 my $experiments_path;
 
@@ -139,19 +142,20 @@ if($num_courses == 0){
 	
 }
 
+print "\n Number of courses idendified in this dataset: $num_courses \n";
 print $log "\n Number of courses idendified in this dataset: $num_courses \n";
 
 my $counter = 0;
 my %docid_to_courseid = ();
 
-open (my $result_file, ">$results_path/results_$basename.txt") 
-	or die "cannot open $results_path/results_$basename.txt for writing";
+open (my $result_file, ">$results_path/results_$basename"."_$incourse.txt") 
+	or die "cannot open $results_path/results_$basename"."_$incourse.txt for writing";
 # print header	
 print $result_file "FOLD \t # of samples \t P \t R \t F_1 \t +Train% \t idenC_train \t idenC_test \t FPR \t";
 print $result_file "Train_+ve \t Train_-ve \t Test_+ve \t Test_-ve";
 	
-open (my $con_matrices_file, ">$results_path/matrices_$basename.txt") 
-	or die "cannot open $results_path/results....txt";
+open (my $con_matrices_file, ">$results_path/matrices_$basename"."_$incourse.txt") 
+	or die "cannot open $results_path/matrices....txt";
 # print header
 print $con_matrices_file "Course \t Weight \t True +ve \t True -ve \t False +ve \t False -ve \n";
 
@@ -162,10 +166,11 @@ foreach my $i (0..($num_folds-1)){
 	my $weight		= 1;
 	my %data_to_shuffle_mapping = ();
 	
-	print $con_matrices_file "\n $courses[$i] \t";
-	my $lastname	= (split(/_train/,$in1))[1];
-	$lastname =~ s/(\_).*\.?(txt)/$1$courses[$i].$2/;
+	print $con_matrices_file "\n $incourse \t";
+	my $lastname	= (split(/_training/,$in1))[1];
+	$lastname =~ s/(\_)[0-9](.*\.?txt)/$1$i$2/;
 	
+	# print "\n$lastname"; exit(0);
 	my $training_data_file	= "$experiments_path/".$basename."_training".$lastname;
 	my $test_data_file		= "$experiments_path/".$basename."_test".$lastname;
 	
@@ -187,12 +192,12 @@ foreach my $i (0..($num_folds-1)){
 	my $number_of_samples = keys %$test_data;
 	
 	if($number_of_samples == 0){
-		print "Exception: zero samples read! Check data file.\n"; exit(0);
+		print "\n Exception: zero samples read! Check data file.\n"; exit(0);
 	}
 
 	print "#samples: $number_of_samples \t # Folds: $num_folds \n";
 
-	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_".$courses[$i].".txt") 
+	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_".$incourse.".txt") 
 		or die "cannot open $experiments_path/results....txt";
 	
 	# my ($trainingset, $testset) = getTrainTestCourseSetsCV($i, $part_size, keys %data_to_shuffle_mapping);
@@ -210,7 +215,6 @@ foreach my $i (0..($num_folds-1)){
 		else{
 			$trainingset_distribution{'-'} ++;
 		}
-		$training_data->{$doc_id};
 		print TRAIN "$training_data->{$doc_id}\n";
 	}
 	close TRAIN;
@@ -234,9 +238,12 @@ foreach my $i (0..($num_folds-1)){
 									 );
 	}
 	elsif ($weighing eq 'nve'){
+			print $log "\n Setting naive class weights.";
+			print $log "\n $init_weight for fold $i";
 			$weight =  $init_weight;
 	}
 	else{
+		print $log "\n Invalid value for option -w (class weight) \n";
 		print "\n Invalid value for option -w (class weight) \n";
 		Help();
 		exit(0);
@@ -248,9 +255,10 @@ foreach my $i (0..($num_folds-1)){
 	my $training_set = Algorithm::LibLinear::DataSet->load(filename => "$experiments_path/DATA.train");
 	my $classifier	 = $learner->train(data_set => $training_set);
 
+	print $log "\n# Features: " . $classifier->num_features ;
 	print "\n# Features: " . $classifier->num_features ;
 	
-	my $model_file_fold = $model_file . "_$courses[$i]";
+	my $model_file_fold = $model_file . "_$incourse";
 	$classifier->save(filename => $model_file_fold);
 	$svmweights{$i} = getSVMweights($model_file_fold);
 
@@ -258,7 +266,8 @@ foreach my $i (0..($num_folds-1)){
 	my $end_timestamp = ($hour1*60*60)+($min1*60)+($sec1);
 	my $duration = $end_timestamp - $start_timestamp;
 	$training_time += $duration;
-	printf "Training time for fold $i:\t%02d second(s) \n", $duration;
+	printf $log "\n Training time for fold $i:\t%02d second(s) \n", $duration;
+	printf "\n Training time for fold $i:\t%02d second(s) \n", $duration;
 	
 	($sec,$min,$hour,@rest) =   localtime(time);
 	$start_timestamp = ($hour*60*60)+($min*60)+($sec);
@@ -289,7 +298,7 @@ foreach my $i (0..($num_folds-1)){
 		$output{$testset_docids[$j]}{$label}	 = $prediction;
 		$output_details{$testset_docids[$j]}	 = +{	serialid 		=> $j,
 														fold 			=> $i,
-														course			=> $courses[$i],
+														course			=> $incourse,
 														label 			=> $label, 
 														prediction 		=> $prediction, 
 														predictvalue	=> $predict_values->[0],
@@ -307,7 +316,7 @@ foreach my $i (0..($num_folds-1)){
 	$testing_time += $duration;
 
 	$foldsize{$i} = (keys %foldoutput);
-	print "Size of Output for $courses[$i]: $foldsize{$i} \n";
+	print $log "Size of Output for $incourse: $foldsize{$i} \n";
 
 	my $matrix	= getContigencyMatrix(\%foldoutput);
 	$foldwise_contingency_matrix{$i} = $matrix;
@@ -361,7 +370,7 @@ foreach my $i (0..($num_folds-1)){
 								($trainingset_distribution{'+'} + $trainingset_distribution{'-'}))
 							);
 		
-	print $result_file "\n $courses[$i] \t $number_of_samples \t $precision{$i}\t $recall{$i} \t $f1{$i}";
+	print $result_file "\n $incourse \t $number_of_samples \t $precision{$i}\t $recall{$i} \t $f1{$i}";
 	
 	print $result_file "\t $training_positive ";
 	print $result_file "\t $i_denC_train{$i}\t $i_denC_test{$i}\t $fpr\t";
@@ -1124,7 +1133,7 @@ sub displayFeatureVector{
 	my $predictvaluesum = 0;
 	my $termvaluesum = 0;
 	my $nontermvaluesum = 0;
-	foreach my $termid ( sort { $a <=> $b } ( keys ($output_details{$docid}->{'features'}) ) ){
+	foreach my $termid ( sort { $a <=> $b } ( keys %{$output_details{$docid}->{'features'}} ) ){
 		my $record = $termindex->{$termid};
 		my $featureweight = $output_details{$docid}{'features'}{$termid};
 		if ( defined $record->{'term'} ){
@@ -1161,7 +1170,7 @@ sub makehashcopy{
 	my %copy = ();
 	
 	foreach my $k1 (keys %$hash2d){
-		foreach my $k2 (keys %$hash2d->{$k1}){
+		foreach my $k2 (keys %{$hash2d->{$k1}} ){
 			$copy{$k1}{$k2} = $hash2d->{$k1}{$k2};
 		}
 	}
@@ -1310,8 +1319,8 @@ sub readFeatureFile{
 		if( !exists $data{$docid} ){
 			$data{$docid} = $dataline;
 		}else{
-			# print "docid: $docid \n";		#  . (split /\t/, $dataline)[0]; 
-			#print "existing: $data{$docid}\n";	# . (split /\t/, $data{$docid})[0] ."\n"; 
+			# print "\n docid: $docid ";		#  . (split /\t/, $dataline)[0]; 
+			#print "\n Existing: $data{$docid}";	# . (split /\t/, $data{$docid})[0] ."\n"; 
 		}
 	}
 	close DATA;

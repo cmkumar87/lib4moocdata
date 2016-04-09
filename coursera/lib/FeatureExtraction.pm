@@ -342,7 +342,7 @@ sub generateTrainingFile{
 				#initialization
 				my @relations = ('expansion','contingency','temporal','comparison');
 				open (my $SENSE_FILE, "<$pdtbfilepath/$forumid_number/output/$threadid".".txt.exp2.out")
-								or warn "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output/$threadid.txt.exp2.out \n $!";
+					or warn "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output/$threadid.txt.exp2.out \n $!";
 				
 				$pdtbrelation{$docid}{'expansion'}		= 0;
 				$pdtbrelation{$docid}{'contingency'}	= 0;
