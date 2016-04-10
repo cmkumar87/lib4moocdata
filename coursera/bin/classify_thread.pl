@@ -148,13 +148,13 @@ print $log "\n Number of courses idendified in this dataset: $num_courses \n";
 my $counter = 0;
 my %docid_to_courseid = ();
 
-open (my $result_file, ">$results_path/results_$basename"."_$incourse.txt") 
-	or die "cannot open $results_path/results_$basename"."_$incourse.txt for writing";
+open (my $result_file, ">$results_path/results_$basename"."_$incourse"."_$weighing.txt") 
+	or die "cannot open $results_path/results_$basename"."_$incourse"."_$weighing.txt for writing";
 # print header	
 print $result_file "FOLD \t # of samples \t P \t R \t F_1 \t +Train% \t idenC_train \t idenC_test \t FPR \t";
 print $result_file "Train_+ve \t Train_-ve \t Test_+ve \t Test_-ve";
 	
-open (my $con_matrices_file, ">$results_path/matrices_$basename"."_$incourse.txt") 
+open (my $con_matrices_file, ">$results_path/matrices_$basename"."_$incourse"."_$weighing.txt") 
 	or die "cannot open $results_path/matrices....txt";
 # print header
 print $con_matrices_file "Course \t Weight \t True +ve \t True -ve \t False +ve \t False -ve \n";
@@ -197,8 +197,8 @@ foreach my $i (0..($num_folds-1)){
 
 	print "#samples: $number_of_samples \t # Folds: $num_folds \n";
 
-	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_".$incourse.".txt") 
-		or die "cannot open $experiments_path/results....txt";
+	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_$incourse"."_$weighing.txt") 
+		or die "cannot open $experiments_path/results_dtl....txt";
 	
 	# my ($trainingset, $testset) = getTrainTestCourseSetsCV($i, $part_size, keys %data_to_shuffle_mapping);
 
