@@ -90,8 +90,9 @@ if(!defined $courseid){
 	print "Exception. courseid not defined"; exit(0);
 }
 
-my $threads_query		= "select id, forum_id, title, num_views, num_posts, votes, instructor_replied, 
-												is_spam from forum_threads where forum_id = ?";								
+my $threads_query		= "select id, forum_id, title, num_views, num_posts, 
+									votes, instructor_replied, is_spam 
+								from forum_threads where forum_id = ?";								
 my $threadsth			= $dbh->prepare("$threads_query")
 								or die "Couldn't prepare statement \n $threads_query \n $DBI::errstr\n";
 
@@ -203,7 +204,7 @@ foreach my $forum_id (sort keys %$forums){
 				
 				$comminsertsth->execute($comments->{$comment}->{'id'}, $comments->{$comment}->{'post_id'}, 
 						$threadid, $comments->{$comment}->{'comment_text'}, 
-						$comments->{$comment}->{'votes'},$comments->{$comment}->{'user'},
+						$comments->{$comment}->{'votes'},$comments->{$comment}->{'user_id'},
 						$comments->{$comment}->{'post_time'}, 
 						$forum_id, $courseid
 					)	or die "Couldn't execute statement \n $comminsert_query".

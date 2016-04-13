@@ -124,7 +124,7 @@ if(defined $courseid){
 my $forumrows = $dbh->selectall_arrayref($forumidsquery) 
 								or die "Query failed! $DBI::errstr \n $forumidsquery \n";
 
-if (!defined $forumrows || keys %$forumrows eq 0){
+if (!defined $forumrows || scalar @$forumrows eq 0){
 	print $log "\n No forums selected. Exisitng..."; exit(0);
 }
 
