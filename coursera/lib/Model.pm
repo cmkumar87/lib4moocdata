@@ -42,7 +42,7 @@ sub getDBHandle{
 	
 	if (defined $unicode){
 		$dbh = DBI->connect($dsn,$uname,$pswd,{sqlite_unicode => 1})
-						or die "pl says Cannot connect:   $DBI::errstr\n";
+						or die "pl says Cannot connect:   $DBI::errstr\n dsn-$dsn";
 	}
 	else{
 		#print "\n Connecting to Mysql db with $dsn with uname $uname";

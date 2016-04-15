@@ -44,8 +44,10 @@ sub Help{
 my $help				= 0;
 my $quite				= 0;
 my $courseid			= undef;
+my $dbname				= undef;
 
 $help = 1 unless GetOptions(
+				'dbname=s'		=> \$dbname,
 				'course=s'		=> \$courseid,
 				'h' 			=> \$help,
 				'q' 			=> \$quite
@@ -56,7 +58,7 @@ if ( $help ){
 	exit(0);
 }
 
-# my $dbh 	= Model::getDBHandle("$path/../data",1,undef,$dbname);
+my $dbh 	= Model::getDBHandle("$path/../data",1,undef,$dbname);
 
 open( my $log, ">$path/../logs/$progname.log") 
 		or die "\n Cannot open $path/../logs/$progname.log";
@@ -165,7 +167,7 @@ foreach my $dir (@forum_dirs){
 
 		# make pdtb densities: birelations
 		if($pdtbrelation{$docid}{'biall'} > 0){
-			foreach my $relation (sort keys $pdtbrelation{$docid}){
+			foreach my $relation (sort keys %{$pdtbrelation{$docid}}){
 				if(	$relation =~ /den$/){
 					$pdtbrelation{$docid}{ $relation} = 
 					$pdtbrelation{$docid}{ $relation }/$pdtbrelation{$docid}{'biall'};
