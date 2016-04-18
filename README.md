@@ -13,9 +13,9 @@ A typical data export consists of the following .sql files
 </ol>
 
 A .txt file with clickstream data is also provided. We do not process them yet in this library <br>
-5) &lt;coursecode&gt;_clickstream_export.gz
+5. &lt;coursecode&gt;_clickstream_export.gz
 
-For replicating our EDM work, it is sufficient to import file (1), (2) and (3).
+For replicating our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM work</a>, it is sufficient to import files (1), (2) and (3).
 
 <h3>Prerequisites</h3>
 To use the library to process and analyse your data you will first need to install the MySQL database and ingest the .sql files into the database.
