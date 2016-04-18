@@ -12,8 +12,10 @@ A typical data export consists of the following .sql files
 <li> &lt;Full_Coursename&gt;(&lt;coursecode&gt;)_SQL_unanonymizable.sql </li>
 </ol>
 
-Besides, a txt file with clickstream data is also provided. We do not process them yet in this library <br>
+A .txt file with clickstream data is also provided. We do not process them yet in this library <br>
 5) &lt;coursecode&gt;_clickstream_export.gz
+
+For replicating our EDM work, it is sufficient to import file (1), (2) and (3).
 
 <h3>Prerequisites</h3>
 To use the library to process and analyse your data you will first need to install the MySQL database and ingest the .sql files into the database.
