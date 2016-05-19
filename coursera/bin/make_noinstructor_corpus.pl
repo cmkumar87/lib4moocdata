@@ -82,9 +82,14 @@ if (!$quite){
 open (my $log, ">$path/../logs/$progname.log") 
 				or die "cannot open file $path/../logs/$progname.log for writing";
 
+if(!defined $courseid){
+	print $log "\n Exception: courseid not defined"; 
+	print "\n Exception: courseid not defined"; exit(0);
+}
+				
 if(!defined $dbname){
 	print $log "\n Exception: dbname not defined"; 
-	print "\n Exception: dname not defined"; exit(0);
+	print "\n Exception: dbname not defined"; exit(0);
 }
 
 my $dbh 			= Model::getDBHandle("$path/../data",1,undef,$dbname);
@@ -118,7 +123,7 @@ else{
 
 if(defined $courseid){
 	push( @courses, $courseid );
-	$forumidsquery = Model::appendListtoQuery($forumidsquery,\@courses, 'courseid ', 'and ');
+	$forumidsquery = Model::appendListtoQuery($forumidsquery, \@courses, 'courseid ', 'and ');
 }
 
 my $forumrows = $dbh->selectall_arrayref($forumidsquery) 
