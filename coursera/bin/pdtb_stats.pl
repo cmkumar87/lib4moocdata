@@ -47,7 +47,6 @@ my $courseid			= undef;
 my $dbname				= undef;
 
 $help = 1 unless GetOptions(
-				'dbname=s'		=> \$dbname,
 				'course=s'		=> \$courseid,
 				'h' 			=> \$help,
 				'q' 			=> \$quite
@@ -57,8 +56,6 @@ if ( $help ){
 	Help();
 	exit(0);
 }
-
-my $dbh 	= Model::getDBHandle("$path/../data",1,undef,$dbname);
 
 open( my $log, ">$path/../logs/$progname.log") 
 		or die "\n Cannot open $path/../logs/$progname.log";
