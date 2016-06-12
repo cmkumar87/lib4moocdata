@@ -183,7 +183,8 @@ my @the_rest			= (3,7,15,31);
 
 my @edm 				= (31);
 my @proposed			= (32, 64, 63, 127);
-my @iterations			= (31, 32, 64, 63, 127);
+my @pdtb				= (64);
+my @iterations			= (31,32, 64, 63, 127);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -369,6 +370,14 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 	$datasets{"test$index"}  	=  $test_set;
 }
 
+#hashmap of removed file
+my $removed_files;
+$removed_files = readRemovedFiles();
+if(keys %{$removed_files} eq 0){
+	print "\n Error: no removed files found";
+	exit(0);
+}
+
 print $log "\n Training and test datasets identified";
 
 foreach my $type ("test","training"){
@@ -393,6 +402,20 @@ foreach my $type ("test","training"){
 				$agree				= $d5;
 				$pdtb 				= $d6;
 				$courseref			= $d7;
+			}
+
+			if($pdtb){
+				#hashmap of removed file
+				# $removed_files = readRemovedFiles();
+				# if(keys %{$removed_files} eq 0){
+					# print "\n Error: no removed files found";
+					# exit(0);
+				# }
+				
+				# foreach my $file (keys %{$removed_files}){
+					# print "\n $file \t $removed_files->{$file}";
+				# }
+				# exit(0);
 			}
 			
 			# output file			
@@ -506,7 +529,7 @@ foreach my $type ("test","training"){
 														$numposts, $forumtype, 
 														$exp_path, $feature_file,
 														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-														$debug, $pdtb, $pdtbfilepath, $print_format
+														$debug, $pdtb, $pdtbfilepath, $removed_files, $print_format
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open $tmp_file file for reading \n $!";
@@ -666,4 +689,20 @@ sub getBin{
 	else{
 		return ($d0,$d1,$d2,$d3,$d4,$d5,$d6,$d7,$d8,$d9,$d10);
 	}
+}
+
+sub readRemovedFiles{
+	my %removed_files = ();
+	open( my $rem_fh, "<$path/../data/Removed_files_$courseid".".txt") 
+			or die "\n Cannot open $path/../data/Removed_files_$courseid.txt";
+	while (my $line = <$rem_fh>){
+		chomp $line;
+		if ($line =~ /^$/){ next; }
+		if ($line =~ /^\s*$/){ next; }
+		if ($line =~ /^Folder.*$/){ next; }
+		$line	=~ s/^(.*)?\.txt$/$1/;
+		$removed_files {$line} = 1;
+	}
+	close $rem_fh;
+	return \%removed_files;
 }
