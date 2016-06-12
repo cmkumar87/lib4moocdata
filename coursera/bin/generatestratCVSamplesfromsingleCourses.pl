@@ -183,7 +183,7 @@ my @the_rest			= (3,7,15,31);
 
 my @edm 				= (31);
 my @proposed			= (32, 64, 63, 127);
-my @pdtb				= (64);
+my @pdtb_feature		= (64);
 my @iterations			= (31,32, 64, 63, 127);
 
 #sanity check
