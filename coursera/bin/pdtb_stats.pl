@@ -183,10 +183,10 @@ foreach my $dir (@forum_dirs){
 			$pdtbrelation{$docid}{'compden'}	= $pdtbrelation{$docid}{'contrast'}	/$pdtbrelation{$docid}{'all'};	
 		}
 		else{
-			$pdtbrelation{$docid}{'expden'}			= 0;
-			$pdtbrelation{$docid}{'contden'}		= 0;
-			$pdtbrelation{$docid}{'tempden'}		= 0;
-			$pdtbrelation{$docid}{'compden'}		= 0;
+			$pdtbrelation{$docid}{'expden'}		= 0;
+			$pdtbrelation{$docid}{'contden'}	= 0;
+			$pdtbrelation{$docid}{'tempden'}	= 0;
+			$pdtbrelation{$docid}{'compden'}	= 0;
 		}
 
 		# Analysis
