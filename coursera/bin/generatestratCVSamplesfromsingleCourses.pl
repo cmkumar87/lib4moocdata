@@ -146,7 +146,7 @@ else{
 
 my $error_log_file	= "$path/../logs/$progname"."_$courseid".".err.log";
 my $pdtbfilepath	= "$path/../$courseid"."_pdtbinput";
-my $log_file_name = "$progname"."_$courseid";
+my $log_file_name 	= "$progname"."_$courseid";
 open (my $log ,">$path/../logs/$log_file_name.log")
 				or die "cannot open file $path/../logs/$log_file_name.log for writing";
 
@@ -183,7 +183,8 @@ my @the_rest			= (3,7,15,31);
 
 my @edm 				= (31);
 my @proposed			= (32, 64, 63, 127);
-my @iterations			= (31, 32, 64, 63, 127);
+my @pdtb_feature		= (64);
+my @iterations			= (31,32, 64, 63, 127);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -222,6 +223,13 @@ my $corpus;
 
 foreach my $course (@$courses){
 	push (@$corpus, $course);
+}
+
+#sanity check
+if(scalar @$corpus eq 0){
+	print $log "# of courses in the corpus is zero. please pass a valid course name as an argument.";
+	Help();
+	exit(0);
 }
 
 my %datasets				= ();
@@ -345,8 +353,8 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 	
 	my $posfold_size = int($max_posthread_sample_id / $num_folds);
 	my $negfold_size = int($max_negthread_sample_id / $num_folds);
-	print $log "\n+ve threads Num folds: $num_folds \t Fold size: $posfold_size \t ";
-	print $log "\n-ve threads Num folds: $num_folds \t Fold size: $negfold_size \t ";
+	print $log "\n+ve threads: $max_posthread_sample_id \t Num folds: $num_folds \t Fold size: $posfold_size \t ";
+	print $log "\n-ve threads: $max_negthread_sample_id \t Num folds: $num_folds \t Fold size: $negfold_size \t ";
 
 	my $postraining_set;
 	my $postest_set;	
@@ -355,11 +363,19 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 	
 	($postraining_set, $postest_set) = getTrainTestCourseSetsCV($index, $posfold_size, \%posthreads);
 	($negtraining_set, $negtest_set) = getTrainTestCourseSetsCV($index, $negfold_size, \%negthreads);
-	print "\n generateCVSamplesfromsingleCourses: test and training for fold $index done";
+	print "\n generatestratCVSamplesfromsingleCourses: test and training for fold $index done";
 	my $training_set = mergePositivenNegativeSets($postraining_set, $negtraining_set);
 	my $test_set	 = mergePositivenNegativeSets($postest_set, $negtest_set);
 	$datasets{"training$index"} =  $training_set;
 	$datasets{"test$index"}  	=  $test_set;
+}
+
+#hashmap of removed file
+my $removed_files;
+$removed_files = readRemovedFiles();
+if(keys %{$removed_files} eq 0){
+	print "\n Error: no removed files found";
+	exit(0);
 }
 
 print $log "\n Training and test datasets identified";
@@ -387,6 +403,20 @@ foreach my $type ("test","training"){
 				$pdtb 				= $d6;
 				$courseref			= $d7;
 			}
+
+			if($pdtb){
+				#hashmap of removed file
+				# $removed_files = readRemovedFiles();
+				# if(keys %{$removed_files} eq 0){
+					# print "\n Error: no removed files found";
+					# exit(0);
+				# }
+				
+				# foreach my $file (keys %{$removed_files}){
+					# print "\n $file \t $removed_files->{$file}";
+				# }
+				# exit(0);
+			}
 			
 			# output file			
 			$outfile  .=  $d0 	? "forum+"			: "";
@@ -397,6 +427,9 @@ foreach my $type ("test","training"){
 			$outfile  .=  $d5	? "agree+"			: "";
 			$outfile  .=  $d6 	? "pdtb+"	 		: "";
 			$outfile  .=  $d7	? "course+" 		: "";
+			
+			print "\n Features switched on for this iteration $iter: $outfile";
+			print $log "\n Features switched on for this iteration $iter: $outfile";
 			
 			$outfile	.=  "_".$type."_".$fold;
 			$outfile 	.= "_". $courses->[0] . ".txt";
@@ -496,7 +529,7 @@ foreach my $type ("test","training"){
 														$numposts, $forumtype, 
 														$exp_path, $feature_file,
 														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-														$debug, $pdtb, $pdtbfilepath, $print_format
+														$debug, $pdtb, $pdtbfilepath, $removed_files, $print_format
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open $tmp_file file for reading \n $!";
@@ -656,4 +689,20 @@ sub getBin{
 	else{
 		return ($d0,$d1,$d2,$d3,$d4,$d5,$d6,$d7,$d8,$d9,$d10);
 	}
+}
+
+sub readRemovedFiles{
+	my %removed_files = ();
+	open( my $rem_fh, "<$path/../data/Removed_files_$courseid".".txt") 
+			or die "\n Cannot open $path/../data/Removed_files_$courseid.txt";
+	while (my $line = <$rem_fh>){
+		chomp $line;
+		if ($line =~ /^$/){ next; }
+		if ($line =~ /^\s*$/){ next; }
+		if ($line =~ /^Folder.*$/){ next; }
+		$line	=~ s/^(.*)?\.txt$/$1/;
+		$removed_files {$line} = 1;
+	}
+	close $rem_fh;
+	return \%removed_files;
 }

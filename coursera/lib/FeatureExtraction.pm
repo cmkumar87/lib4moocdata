@@ -16,6 +16,7 @@ use warnings;
 use FindBin;
 use Lingua::EN::Ngram;
 use Lingua::EN::Tokenizer::Offsets qw( token_offsets tokenize get_tokens );
+no autovivification;
 
 #use lib "/opt/perl5/perls/perl-5.20.1/lib/site_perl/5.20.1"
 
@@ -41,7 +42,7 @@ sub generateTrainingFile{
 			$tlength, $forumtype,
 			$path, $feature_file,
 			$course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-			$debug, $pdtb, $pdtbfilepath, $print_format
+			$debug, $pdtb, $pdtbfilepath, $removed_files, $print_format
 		) = @_;
 
 	my @courses = keys %{$course_samples};
@@ -56,25 +57,26 @@ sub generateTrainingFile{
 	
 	#sanity checks
 	if(defined $corpus){
-		print "\nCORPUS: @$corpus ";
+		print "\n CORPUS: @$corpus ";
 	}
 	else{
-		die "\nException: Corpus undef \n";
+		die "\n Exception: Corpus undef";
 	}
 	
-	my $total_num_threads = 0;
-	$total_num_threads = Model::getNumValidThreads($dbh,$corpus);
-	if ($total_num_threads == 0){
-		die "Exception in generateTrainingFile: # threads is zero in $corpus_type course corpus\n";
+	my $total_num_threads	= 0;
+	if($unigrams){
+		$total_num_threads		= Model::getNumValidThreads($dbh,$corpus);
+		if ($total_num_threads	== 0){
+			die "Exception in generateTrainingFile: # threads is zero in the corpus\n";
+		}
+		print "\n Number of valid threads \t $total_num_threads";
 	}
-	print "\n Number of valid threads \t $total_num_threads";
 	
 	my $lexical = 0;
 	my $lengthf = 0;
 	my $time	= 0;
 	
-	if ( $courseref || $nonterm_courseref || 
-		 $agree || $affir || $pdtb){
+	if ( $courseref || $nonterm_courseref || $agree || $affir || $pdtb){
 		 $lexical = 1;
 	}
 	
@@ -341,8 +343,14 @@ sub generateTrainingFile{
 			if($pdtb){
 				#initialization
 				my @relations = ('expansion','contingency','temporal','comparison');
+				
+				#skip removed files. These are files that failed to be parsed by the PDTB parser
+				if(exists $removed_files->{$threadid}){
+					next;
+				}
+				
 				open (my $SENSE_FILE, "<$pdtbfilepath/$forumid_number/output/$threadid".".txt.exp2.out")
-					or warn "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output/$threadid.txt.exp2.out \n $!";
+					or die "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output/$threadid.txt.exp2.out \n $!";
 				
 				$pdtbrelation{$docid}{'expansion'}		= 0;
 				$pdtbrelation{$docid}{'contingency'}	= 0;
@@ -764,12 +772,14 @@ sub generateTrainingFile{
 	
 	my %nontermfeatures = ();
 	my $maxtermfeaturecount = 0;
-	
-	# find maxnumber of unigram features.
-	foreach my $category_id (keys %$threadcats){
-		my $tftab			 =	$threadcats->{$category_id}{'tftab'};
-		my $max_termid 		+= @{$dbh->selectcol_arrayref("select max(termid) from $tftab")}[0];
-		$maxtermfeaturecount = ($max_termid > $maxtermfeaturecount) ? $max_termid : $maxtermfeaturecount;
+
+	if($unigrams){	
+		# find maxnumber of unigram features.
+		foreach my $category_id (keys %$threadcats){
+			my $tftab			 =	$threadcats->{$category_id}{'tftab'};
+			my $max_termid 		+= @{$dbh->selectcol_arrayref("select max(termid) from $tftab")}[0];
+			$maxtermfeaturecount = ($max_termid > $maxtermfeaturecount) ? $max_termid : $maxtermfeaturecount;
+		}
 	}
 	print "\n Maxtermfeaturecount: $maxtermfeaturecount";
 	
