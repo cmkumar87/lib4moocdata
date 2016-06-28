@@ -82,7 +82,6 @@ my $pdtbfilepath = "$path/../$courseid"."_pdtbinput";
 # }
 # close $rem_fh;
 
-
 my %pdtbrelation	= ();
 my @relations 		= ('expansion','contingency','temporal','comparison');
 
