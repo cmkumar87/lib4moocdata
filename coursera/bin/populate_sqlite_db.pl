@@ -53,12 +53,14 @@ my $quite				= 0;
 my $debug				= 0;
 my $in_dbname			= undef;
 my $out_dbname			= undef;
+my $coursera_dump_version = 2; #default
 my $courseid;
 
 $help = 1 unless GetOptions(
 				'indb=s'		=> \$in_dbname,
 				'outdb=s'		=> \$out_dbname,
 				'course=s'		=> \$courseid,
+				'version=i'		=> \$coursera_dump_version, 
 				'debug'			=> \$debug,
 				'h' 			=> \$help,
 				'q' 			=> \$quite
@@ -120,10 +122,24 @@ my $userinsert_query	= "insert into user (id, user_title, postid, forumid, threa
 my $userinsertsth		= $litedbh->prepare($userinsert_query)
 								or die "Couldn't prepare statement \n $userinsert_query \n $DBI::errstr\n";;
 								
-my $user_hashmap_select_query	= "select user_id, session_user_id from hash_mapping";
+my $user_hashmap_select_query;
+if($coursera_dump_version eq 1){
+	$user_hashmap_select_query	= "select user_id, anon_user_id from hash_mapping";
+}
+elsif($coursera_dump_version eq 2){
+	$user_hashmap_select_query	= "select user_id, session_user_id from hash_mapping";
+}
+
 my $userid_hashvalue_map		=  $dbh->selectall_hashref($user_hashmap_select_query,'user_id')
 											or die "query failed: $user_hashmap_select_query \n $DBI::errstr";
-my $user_accessgroup_query		= "select session_user_id, access_group_id from users";
+my $user_accessgroup_query;
+if($coursera_dump_version eq 1){
+	$user_accessgroup_query = "select anon_user_id, access_group_id from users";
+}
+elsif($coursera_dump_version eq 2){
+	$user_accessgroup_query = "select session_user_id, access_group_id from users";
+}
+
 my $user_accessgroup_map		=  $dbh->selectall_hashref($user_accessgroup_query,'session_user_id')
 											or die "query failed: $user_accessgroup_query \n $DBI::errstr";
 my $user_title_query			= "select id, forum_title from access_groups";
@@ -214,7 +230,14 @@ foreach my $forum_id (sort keys %$forums){
 									forum-$forum_id \n" . $DBI::errstr;
 				
 				my $user_id					= $comments->{$comment}{'user_id'};
-				my $session_user_id_hash	= $userid_hashvalue_map->{$user_id}{'session_user_id'};
+				my $session_user_id_hash;
+				if($coursera_dump_version eq 1){
+					$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'anon_user_id'};
+				}
+				elsif($coursera_dump_version eq 2){
+					$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'session_user_id'};
+				}
+				
 				my $access_group			= $user_accessgroup_map->{$session_user_id_hash}{'access_group_id'};
 				my $user_title				= $user_title->{$access_group}{'forum_title'};
 				
@@ -226,7 +249,13 @@ foreach my $forum_id (sort keys %$forums){
 			}
 
 			my $user_id					= $posts->{$post}{'user_id'};
-			my $session_user_id_hash	= $userid_hashvalue_map->{$user_id}{'session_user_id'};
+			my $session_user_id_hash;
+			if($coursera_dump_version eq 1){
+				$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'anon_user_id'};
+			}
+			elsif($coursera_dump_version eq 2){
+				$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'session_user_id'};
+			}
 			my $access_group			= $user_accessgroup_map->{$session_user_id_hash}{'access_group_id'};
 			my $user_title				= $user_title->{$access_group}{'forum_title'};
 			
