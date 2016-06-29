@@ -74,23 +74,39 @@ if ( $help ){
 my $dbh			= Model::getDBHandle(undef,1,'mysql',$in_dbname);
 my $litedbh		= Model::getDBHandle("$path/../data",1,undef,$out_dbname);
 
+open( my $log, ">$path/../logs/$progname.err.log") 
+		or die "\n Cannot open $path/../logs/$progname.err.log";
+
 if(!defined $in_dbname){
-	print "Exception. input dbname is undefined"; exit(0);
+	print "Exception. input dbname is undefined"; 
+	print $log "Exception. input dbname is undefined"; 
+	exit(0);
 }
 elsif(!defined $dbh){
-	print "Exception. Db handle is undefined"; exit(0);
+	print "Exception. Db handle is undefined"; 
+	print $log "Exception. Db handle is undefined"; 
+	exit(0);
 }
 
 if(!defined $out_dbname){
-	print "Exception. output dbname is undefined"; exit(0);
+	print "Exception. output dbname is undefined"; 
+	print $log "Exception. output dbname is undefined"; 
+	exit(0);
 }
 elsif(!defined $litedbh){
-	print "Exception. Db handle is undefined"; exit(0);
+	print "Exception. Db handle is undefined"; 
+	print $log "Exception. Db handle is undefined"; 
+	exit(0);
 }
 
 if(!defined $courseid){
-	print "Exception. courseid not defined"; exit(0);
+	print "Exception. courseid not defined"; 
+	print $log "Exception. courseid not defined"; 
+	exit(0);
 }
+
+print "Running $progname for course-$courseid \t couseradump version-$coursera_dump_version";
+print $log "Running $progname for course-$courseid \t couseradump version-$coursera_dump_version";
 
 my $threads_query		= "select id, forum_id, title, num_views, num_posts, 
 									votes, instructor_replied, is_spam 
@@ -124,7 +140,7 @@ my $userinsertsth		= $litedbh->prepare($userinsert_query)
 								
 my $user_hashmap_select_query;
 if($coursera_dump_version eq 1){
-	$user_hashmap_select_query	= "select user_id, anon_user_id from hash_mapping";
+	$user_hashmap_select_query	= "select user_id, anon_user_id, session_user_id, forum_user_id from hash_mapping";
 }
 elsif($coursera_dump_version eq 2){
 	$user_hashmap_select_query	= "select user_id, session_user_id from hash_mapping";
@@ -154,8 +170,6 @@ my $forum_query	= "select id, name from forum_forums";
 my $forums		= $dbh->selectall_hashref($forum_query,'id') 
 							or die "Couldn't prepare statement \n $forum_query \n $DBI::errstr\n";							
 							
-open( my $log, ">$path/../logs/$progname.err.log") 
-		or die "\n Cannot open $path/../logs/$progname.err.log";
 							
 foreach my $forum_id (sort keys %$forums){
 	# we are only interested in threads from lecture, exam, errata 
@@ -191,8 +205,8 @@ foreach my $forum_id (sort keys %$forums){
 							$threads->{$threadid}{'instructor_replied'},
 							$courseid, $threads->{$threadid}{'is_spam'} )
 							or die "Couldn't execute statement ";
-		
-		my $posts 	 = $dbh->selectall_hashref("select * from forum_posts where thread_id = $threadid", 'id');
+
+		my $posts  = $dbh->selectall_hashref("select * from forum_posts where thread_id = $threadid", 'id');
 		print $log "\n $threadid -- \t # of posts " . (keys %$posts);
 		foreach my $post (sort {$a<=>$b} keys %$posts){
 			my $post_text = $posts->{$post}{'post_text'};
@@ -200,12 +214,19 @@ foreach my $forum_id (sort keys %$forums){
 			$post_text =~ s/<.*?>/ /g;
 			$post_text =~ s/\n|\r//g;
 			$post_text =  decode_entities($post_text);
+			my $user_id;
+			if($coursera_dump_version eq 1){
+				$user_id	= $posts->{$post}{'forum_user_id'};
+			}
+			elsif($coursera_dump_version eq 2){
+				$user_id	=	$posts->{$post}{'user_id'};
+			}
 			
-			$postinsertsth->execute( $posts->{$post}->{'id'}, $threadid, 
-						  $posts->{$post}->{'original'}, $posts->{$post}->{'post_order'}, 
+			$postinsertsth->execute( $posts->{$post}{'id'}, $threadid, 
+						  $posts->{$post}{'original'}, $posts->{$post}{'post_order'}, 
 						  $post_text,
-						  $posts->{$post}->{'votes'}, $posts->{$post}->{'user_id'}, 
-						  $posts->{$post}->{'post_time'}, $forum_id, $courseid						
+						  $posts->{$post}{'votes'}, $user_id, 
+						  $posts->{$post}{'post_time'}, $forum_id, $courseid						
 					)
 					or die "Couldn't execute statement \n  $postinsert_query".
 							"\n args: post-$post || thread-$threadid || course-$courseid || forum-$forum_id " . $DBI::errstr;
@@ -217,11 +238,18 @@ foreach my $forum_id (sort keys %$forums){
 				$cmnt_text =~ s/<.*?>/ /g;			
 				$cmnt_text =~ s/\n|\r//g;
 				$cmnt_text =  decode_entities($cmnt_text);
+				my $user_id;
+				if($coursera_dump_version eq 1){
+					$user_id	= $comments->{$comment}{'forum_user_id'};	
+				}
+				elsif($coursera_dump_version eq 2){
+					$user_id	= $comments->{$comment}{'user_id'};	
+				}
 				
-				$comminsertsth->execute($comments->{$comment}->{'id'}, $comments->{$comment}->{'post_id'}, 
-						$threadid, $comments->{$comment}->{'comment_text'}, 
-						$comments->{$comment}->{'votes'},$comments->{$comment}->{'user_id'},
-						$comments->{$comment}->{'post_time'}, 
+				$comminsertsth->execute($comments->{$comment}{'id'}, $comments->{$comment}{'post_id'}, 
+						$threadid, $comments->{$comment}{'comment_text'}, 
+						$comments->{$comment}{'votes'}, $user_id,
+						$comments->{$comment}{'post_time'}, 
 						$forum_id, $courseid
 					)	or die "Couldn't execute statement \n $comminsert_query".
 								"\n args: $comments->{$comment}->{'id'}	|| 
@@ -229,7 +257,6 @@ foreach my $forum_id (sort keys %$forums){
 									thread-$comments->{$comment}->{'thread_id'}	|| 
 									forum-$forum_id \n" . $DBI::errstr;
 				
-				my $user_id					= $comments->{$comment}{'user_id'};
 				my $session_user_id_hash;
 				if($coursera_dump_version eq 1){
 					$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'anon_user_id'};
@@ -248,7 +275,6 @@ foreach my $forum_id (sort keys %$forums){
 											  course-$courseid \n" . $DBI::errstr;
 			}
 
-			my $user_id					= $posts->{$post}{'user_id'};
 			my $session_user_id_hash;
 			if($coursera_dump_version eq 1){
 				$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'anon_user_id'};
