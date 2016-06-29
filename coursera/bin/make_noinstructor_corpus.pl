@@ -165,7 +165,6 @@ my $instcmntqry = "select u.postid, p.post_time from user u, comment p
 my $instcmntsth = $dbh->prepare($instcmntqry)
 						or die "Couldn't prepare user insert statement: " . $DBI::errstr;						
 
-
 my $postsquery = "select id, thread_id, original, post_order, url, post_text,
 					votes, user, post_time, forumid, courseid
 								  from post
@@ -257,9 +256,11 @@ foreach my $forumrow ( @$forumrows ){
 		my $instcmnts = $instcmntsth->fetchall_hashref('postid');
 		
 		if (!defined $instposts && !defined $instcmnts){
+			print $log "Perhaps instposts and instcmnts query returned null for $forumid";
 			next;
 		}
 		elsif ( (keys %$instposts == 0) && (keys %$instcmnts == 0) ){
+			print $log "instposts and instcmnts query returned 0 for $forumid";
 			next;
 		}
 		

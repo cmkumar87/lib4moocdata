@@ -179,6 +179,7 @@ foreach my $forum_id (sort keys %$forums){
 	# and homework (aka. assignment) threads
 	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001) {	next;	}
 	
+	print "\n Processing $forum_id of $courseid";
 	print $log "\n Processing $forum_id of $courseid";
 	
 	my $forumname	= $forums->{$forum_id}{'name'};
@@ -199,6 +200,7 @@ foreach my $forum_id (sort keys %$forums){
 	}
 	
 	print $log "\n # of threads " . (keys %$threads);
+	print "\n # of threads " . (keys %$threads);
 	
 	foreach my $threadid (keys %$threads){
 		my $url = "https://class.coursera.org/$courseid/forum/thread?thread_id=$threadid";
