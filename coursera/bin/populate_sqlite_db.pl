@@ -149,15 +149,18 @@ elsif($coursera_dump_version eq 2){
 my $userid_hashvalue_map		=  $dbh->selectall_hashref($user_hashmap_select_query,'user_id')
 											or die "query failed: $user_hashmap_select_query \n $DBI::errstr";
 my $user_accessgroup_query;
+my $user_accessgroup_map;
 if($coursera_dump_version eq 1){
 	$user_accessgroup_query = "select anon_user_id, access_group_id from users";
+	$user_accessgroup_map 	=  $dbh->selectall_hashref($user_accessgroup_query,'anon_user_id')
+										or die "query failed: $user_accessgroup_query \n $DBI::errstr";
 }
 elsif($coursera_dump_version eq 2){
 	$user_accessgroup_query = "select session_user_id, access_group_id from users";
+	$user_accessgroup_map 	=  $dbh->selectall_hashref($user_accessgroup_query,'session_user_id')
+										or die "query failed: $user_accessgroup_query \n $DBI::errstr";
 }
 
-my $user_accessgroup_map		=  $dbh->selectall_hashref($user_accessgroup_query,'session_user_id')
-											or die "query failed: $user_accessgroup_query \n $DBI::errstr";
 my $user_title_query			= "select id, forum_title from access_groups";
 my $user_title					=  $dbh->selectall_hashref($user_title_query,'id')
 											or die "query failed: $user_title_query \n $DBI::errstr";
