@@ -139,15 +139,20 @@ my $userinsertsth		= $litedbh->prepare($userinsert_query)
 								or die "Couldn't prepare statement \n $userinsert_query \n $DBI::errstr\n";;
 								
 my $user_hashmap_select_query;
+my $userid_hashvalue_map;
+
 if($coursera_dump_version eq 1){
-	$user_hashmap_select_query	= "select user_id, anon_user_id, session_user_id, forum_user_id from hash_mapping";
+	# $user_hashmap_select_query	= "select user_id, anon_user_id, session_user_id, forum_user_id from hash_mapping";
+	$user_hashmap_select_query	= "select anon_user_id, forum_user_id from hash_mapping";
+	$userid_hashvalue_map 		=  $dbh->selectall_hashref($user_hashmap_select_query,'forum_user_id')
+										or die "query failed: $user_hashmap_select_query \n $DBI::errstr";
 }
 elsif($coursera_dump_version eq 2){
 	$user_hashmap_select_query	= "select user_id, session_user_id from hash_mapping";
+	$userid_hashvalue_map		=  $dbh->selectall_hashref($user_hashmap_select_query,'user_id')
+									or die "query failed: $user_hashmap_select_query \n $DBI::errstr";
 }
 
-my $userid_hashvalue_map		=  $dbh->selectall_hashref($user_hashmap_select_query,'user_id')
-											or die "query failed: $user_hashmap_select_query \n $DBI::errstr";
 my $user_accessgroup_query;
 my $user_accessgroup_map;
 if($coursera_dump_version eq 1){
