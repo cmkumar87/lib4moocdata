@@ -160,7 +160,7 @@ if($coursera_dump_version eq 1){
 	$user_accessgroup_map 	=  $dbh->selectall_hashref($user_accessgroup_query,'anon_user_id')
 										or die "query failed: $user_accessgroup_query \n $DBI::errstr";
 }
-elsif($coursera_dump_version eq 2){
+elsif($coursera_dump_version eq 2 ){
 	$user_accessgroup_query = "select session_user_id, access_group_id from users";
 	$user_accessgroup_map 	=  $dbh->selectall_hashref($user_accessgroup_query,'session_user_id')
 										or die "query failed: $user_accessgroup_query \n $DBI::errstr";
@@ -228,7 +228,7 @@ foreach my $forum_id (sort keys %$forums){
 			if($coursera_dump_version eq 1){
 				$user_id	= $posts->{$post}{'forum_user_id'};
 			}
-			elsif($coursera_dump_version eq 2){
+			elsif($coursera_dump_version eq 2 ){
 				$user_id	=	$posts->{$post}{'user_id'};
 			}
 			
@@ -252,7 +252,7 @@ foreach my $forum_id (sort keys %$forums){
 				if($coursera_dump_version eq 1){
 					$user_id	= $comments->{$comment}{'forum_user_id'};	
 				}
-				elsif($coursera_dump_version eq 2){
+				elsif($coursera_dump_version eq 2 ){
 					$user_id	= $comments->{$comment}{'user_id'};	
 				}
 				
@@ -271,7 +271,7 @@ foreach my $forum_id (sort keys %$forums){
 				if($coursera_dump_version eq 1){
 					$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'anon_user_id'};
 				}
-				elsif($coursera_dump_version eq 2){
+				elsif($coursera_dump_version eq 2 ){
 					$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'session_user_id'};
 				}
 				
@@ -289,7 +289,7 @@ foreach my $forum_id (sort keys %$forums){
 			if($coursera_dump_version eq 1){
 				$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'anon_user_id'};
 			}
-			elsif($coursera_dump_version eq 2){
+			elsif($coursera_dump_version eq 2 ){
 				$session_user_id_hash = $userid_hashvalue_map->{$user_id}{'session_user_id'};
 			}
 			my $access_group			= $user_accessgroup_map->{$session_user_id_hash}{'access_group_id'};

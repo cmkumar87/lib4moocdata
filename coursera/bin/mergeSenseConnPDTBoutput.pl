@@ -41,9 +41,11 @@ sub License{
 }
 
 sub Help{
-	print STDERR "Usage: $progname -h\t[invokes help]\n";
+	print STDERR "Usage: $progname -dbname -course -h\t[invokes help]\n";
   	print STDERR "       $progname [-q -debug]\n";
 	print STDERR "Options:\n";
+	print STDERR "\t-dbname \t MySQl database name\n";
+	print STDERR "\t-course \t Coursera courseid \n";
 	print STDERR "\t-q \tQuiet Mode (don't echo license).\n";
 	print STDERR "\t-debug \tPrint additional debugging info to the terminal.\n";
 }
@@ -84,6 +86,25 @@ elsif(!defined $dbname){
 
 chdir("$path/..");
 system("mkdir logs");
+
+open( my $log, ">$path/../logs/$progname.log") 
+		or die "\n Cannot open $path/../logs/$progname.log";
+
+if(defined $dbname && !defined $courseid){
+	$courseid = $dbname;
+}
+elsif(defined $courseid && !defined $dbname ){
+	$dbname	= $courseid;
+}
+
+if(!defined $courseid && !defined $dbname){
+	print $log "Exception. courseid is undefined";
+	print "Exception. courseid is undefined";
+	print $log "Exception. dbname is undefined"; 
+	print "Exception. dbname is undefined"; 
+	exit(0);
+}
+
 chdir("$courseid"."_pdtbinput");
 system("cd");
 
@@ -96,16 +117,13 @@ while (my $line = <$rem_fh>){
 	if ($line =~ /^$/){ next; }
 	if ($line =~ /^\s*$/){ next; }
 	if ($line =~ /^Folder.*$/){ next; }
-	$line	=~ s/^(.*)?\.txt$/$1/;
+	$line	=~ s/^\s*(.*)?\.txt$/$1/;
 	$removed_files {$line} = 1;
 }
 close $rem_fh;
 
 my $forums;
 # my $forums	= $dbh->selectcol_arrayref("select distinct id from forum_forums");
-
-open( my $log, ">$path/../logs/$progname.log") 
-		or die "\n Cannot open $path/../logs/$progname.log";
 
 if(!defined $forumid){		
 	opendir (my $dh, "$path/../$courseid"."_pdtbinput") 
@@ -158,11 +176,15 @@ foreach my $forum_id ( sort @$forums){
 		#check for removed threads / files
 		#these are threads / files omitted due to some unparsable text in them
 		#failing in the PDTB parser pipeline
+	
+		$thread_id =~ s/^([0-9]+)\.txt$/$1/;
+
+		# if($thread_id eq 115){ print "\n here.. \t $removed_files{$thread_id}"; exit(0)}
+		
 		if (exists $removed_files{$thread_id}){
+			print "\n Skipping file $thread_id.txt";
 			next;
 		}
-		
-		$thread_id =~ s/^([0-9]+)\.txt$/$1/;
 		
 		my $posts			= $dbh->selectall_hashref("select * from forum_posts where thread_id = $thread_id", 'id');
 		my $txt_file_path	= "$path/../$courseid"."_pdtbinput/$forum_id";

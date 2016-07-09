@@ -41,6 +41,7 @@ sub Help{
 	print STDERR "Usage: $progname -h\t[invokes help]\n";
   	print STDERR "       $progname [-q -debug]\n";
 	print STDERR "Options:\n";
+	print STDERR "\t-dbname \t MySQl database name\n";
 	print STDERR "\t-q \tQuiet Mode (don't echo license).\n";
 	print STDERR "\t-debug \tPrint additional debugging info to the terminal.\n";
 }
@@ -125,8 +126,14 @@ foreach my $forum_id ( sort @$forums){
 	
 	my $threads		= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
 	# my $threads	= $dbh->selectall_hashref("select * from thread where forumid = $forum_id and courseid = \'$courseid\'", 'id');
+	print "\n Processing $path/../$courseid"."_pdtbinput/$forum_id";
+	print $log "\n Processing $path/../$courseid"."_pdtbinput/$forum_id";
 	
-	if (keys %$threads < 1){ 	next;	}
+	if (keys %$threads < 1){
+		print "\n Skipping $path/../$courseid"."_pdtbinput/$forum_id since no threads were found";
+		print $log "\n Skipping $path/../$courseid"."_pdtbinput/$forum_id since no threads were found";
+		next;
+	}
 	
 	foreach my $thread_id (keys %$threads){
 		#check for removed threads / files
