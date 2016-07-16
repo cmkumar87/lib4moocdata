@@ -73,47 +73,23 @@ my $idftype				= 'none';
 
 my $numposts			= 0;
 my $tprop				= 0;
-my $diffw				= 0;
-my $posttime			= 0;
 my $numw				= 0;
 my $numsentences 		= 0;
-my $firstpostquestion	= 0;
+my $pdtb 				= 0;
 
 my $forumtype			= 0;
-my $forumid				= 0;
-my $positionbias		= 0;
-my $recency				= 0;
-my $threadtime 			= 0; 
-my $userfeatures		= 0;
-
-my $solvedness			= 0;
-
-my $numquestions 		= 0;
-my $numquotes			= 0;
-my $senti				= 0;
-my $prof				= 0;
 my $courseref			= 0;
 my $nonterm_courseref 	= 0;
-my $hedge				= 0;
-my $titlewords			= 0;
-my $affirmations 		= 0;
-my $assessmentwc		= 0; 
-my $problemwc			= 0; 
-my $conclusionwc		= 0; 
-my $requestwc			= 0;
 my $unigrams			= 0;
 my $bigrams				= 0;
 
 my $allfeatures 		= 0;
 
-my $normalize			= 0;
 my $oversample			= 0;
 my $num_folds			= undef;
-my $hold_out_test		= 0;
 my $hold_out_course		= 0;
 my $votes				= 0;
 my $print_format		= 'none';
-my $cv					= 0;
 my $start_index			= 0;
 my $end_index			= undef; # takes the value of #folds if left undefined
 my $intervention_delay  = 0;
@@ -124,11 +100,8 @@ my $tftab;
 $help = 1 unless GetOptions(
 				'corpus=s'		=> 	\$corpus_name,
 				#'n=i'			=>	\$num_samples_g,
-				'norm'			=>	\$normalize,
 				'folds=i'		=>	\$num_folds,
-				'hold'			=>	\$hold_out_test,
 				'holdc'			=>	\$hold_out_course,
-				'cv'			=>	\$cv,
 				'sindex=i'		=>	\$start_index,	# index to start the cv loop at
 				'eindex=i'		=>	\$end_index,	# index to end the cv loop at
 				'osample'		=>	\$oversample,
@@ -142,34 +115,14 @@ $help = 1 unless GetOptions(
 				'idftype=s'		=>	\$idftype,
 				'bi'			=>	\$bigrams,
 				#NON-UNIGRAM FEATURES
-				'forumtype'		=> 	\$forumtype,
-				'forumid'		=>	\$forumid,
-				'position'		=>  \$positionbias,
-				'recency'		=>	\$recency,
-				'titles'		=>	\$titlewords,
-				'asses'			=>	\$assessmentwc,				
-				'prob'			=>	\$problemwc,				
-				'conc'			=>	\$conclusionwc,
-				'req'			=>	\$requestwc,						
-				'qpost'			=>  \$firstpostquestion,
-				'numq'			=>  \$numquestions,
-				'quote'			=>	\$numquotes,
-				'prof'			=>	\$prof,
-				'course'		=>	\$courseref,	
+				'forumtype'		=> 	\$forumtype,			
+				'courseref'		=>	\$courseref,	
 				'nont_course'	=>	\$nonterm_courseref,
-				'affir'			=>	\$affirmations,
-				'senti'			=>	\$senti,
-				'stem'			=>	\$stem,
 				'tprop'			=>	\$tprop,
-				'tlen'			=>	\$numposts,
-				'plen'			=>	\$numw,
 				'nums'			=>	\$numsentences,
-				'diffw'			=>	\$diffw,
-				'ptime'			=>	\$posttime,
-				'hedge'			=>	\$hedge,
-				'ttime'			=>	\$threadtime,
-				'user'			=>	\$userfeatures,
-				'solve'			=>	\$solvedness,
+				'pdtb'			=>	\$pdtb,
+				'affir'			=>	\$affirmations,
+				'stem'			=>	\$stem,
 				#features end here
 				'debug'			=>	\$debug,
 				'test'			=>	\$test, #tests using synthetics data
@@ -193,15 +146,6 @@ if (!$quite){
 	License();
 }
 
-if($samplemode eq 'all'){
-	$outfile = "experiments/coursewise/uni";
-}
-elsif($samplemode eq 'po'){
-	$outfile = "experiments/coursewise/positive_samplesch14_all.txt";
-}
-elsif($samplemode eq 'ne'){
-	$outfile = "experiments/coursewise/negative_samplesch14_all.txt";
-}
 
 if($allfeatures){
 	print "May include non-unigram features: tftype: $tftype idftype:$idftype\n";
@@ -210,9 +154,18 @@ elsif($unigrams){
 	print "unigram features only: tftype: $tftype idftype:$idftype\n";
 }
 
-my $exp_path 		= "$path/../experiments/coursewise";
-my $tmp_file 		= "$path/../experiments/tmp_file/tmp_samples_$corpus_name";
-my $error_log_file	= "$path/../experiments/coursewise/error_$corpus_name";
+my $error_log_file	= "$path/../logs/$progname"."_$courseid".".err.log";
+my $log_file_name 	= "$progname"."_$courseid";
+open (my $log ,">$path/../logs/$log_file_name.log")
+				or die "cannot open file $path/../logs/$log_file_name.log for writing";
+
+mkdir("$path/../experiments");
+my $exp_path 		= "$path/../experiments/";
+
+mkdir("$path/../tmp_file");
+my $tmp_file 		= "$path/../tmp_file/tmp_samples_$corpus_name";
+my $pdtbfilepath	= "$path/..";
+$outfile 			= "../experiments/";
 
 my $db_path			= $path."/../data/testdb";
 my $dbh = Model::getDBHandle($db_path,undef,undef,'cs6207.db');
@@ -285,48 +238,66 @@ if ($corpus_name eq 'd61'){
 								'virtualassessment-001',
 								'warhol-001',
 								'matrix-001'
-								# 'ml-005',
-								# 'rprog-003',		
-								# 'calc1-003',
-								# 'smac-001',		
-								# 'compilers-004',			
-								# 'maththink-004',
-								# 'bioelectricity-002',
-								# 'gametheory2-001',
-								# 'musicproduction-006',
-								# 'medicalneuro-002',
-								# 'comparch-002',
-								# 'biostats-005',			
-								# 'bioinfomethods1-001',
-								# 'casebasedbiostat-002'
+								'ml-005',
+								'rprog-003',		
+								'calc1-003',
+								'smac-001',		
+								'compilers-004',			
+								'maththink-004',
+								'bioelectricity-002',
+								'gametheory2-001',
+								'musicproduction-006',
+								'medicalneuro-002',
+								'comparch-002',
+								'biostats-005',			
+								'bioinfomethods1-001',
+								'casebasedbiostat-002'
 						);
 }
 elsif($corpus_name eq 'd14'){
 		@courses_master_list = (		
-							# 'ml-005',
-							# 'rprog-003',		
-							# 'calc1-003',
-							# 'smac-001',		
-							# 'compilers-004',			
-							# 'maththink-004',
-							# 'bioelectricity-002',
-							# 'musicproduction-006'
-							# 'medicalneuro-002',
-							# 'comparch-002',
-							# 'gametheory2-001',
-							# 'biostats-005',			
-							# 'bioinfomethods1-001',
-							# 'casebasedbiostat-002'
+							'ml-005',
+							'rprog-003',		
+							'calc1-003',
+							'smac-001',		
+							'compilers-004',			
+							'maththink-004',
+							'bioelectricity-002',
+							'musicproduction-006'
+							'medicalneuro-002',
+							'comparch-002',
+							'gametheory2-001',
+							'biostats-005',			
+							'bioinfomethods1-001',
+							'casebasedbiostat-002'
 							);
 }
+elsif($corpus_name eq 'nus'){
+		@courses_master_list = ( 'classicalcomp-001',
+								 'classicalcomp-002',
+								 'reasonandpersuasion-001',
+								 'reasonandpersuasion-002'
+								)
+}
+elsif($corpus_name eq 'pitt'){
+		@courses_master_list = ( 'accountabletalk-001',
+								  'clinicalterminology-001',
+								  'clinicalterminology-002',
+								  'disasterprep-001',
+								  'disasterprep-002',
+								  'disasterprep-003',
+								  'nuclearscience-001',
+								  'nuclearscience-002',
+								  'nutritionforhealth-001',
+								  'nutritionforhealth-002'
+							    )
+}
+else{
+	print "Exception. Unknown $corpus_name. Please enter a valid corpus name (pitt|nus|d14|d61)";
+	Help();
+	exit(0);
+}
 
-# if ( (scalar @courses_master_list) >14 && (scalar @courses_master_list) != 61 && 
-			# (scalar @courses_master_list) >47 ){
-	# die "\n Unseen CORPUS with ". (scalar @courses_master_list) .
-			# " Pls check and update this code if usign a new corpus";
-# }
-
-#include the D61 corpus to the training set
 my @trainingcourses;
 my @testingcourses;
 
@@ -334,9 +305,13 @@ if( $hold_out_course && $corpus_name eq 'd61'){
 	push (@trainingcourses, @courses_master_list[0..46]);
 	push (@testingcourses, @courses_master_list[47..60]);
 }
-elsif( $hold_out_course && $corpus_name eq 'd14'){
+# elsif( $hold_out_course && $corpus_name eq 'd14'){
+	# push (@trainingcourses, $courses_master_list[0]);
+	# push (@testingcourses, @courses_master_list[1..13]);
+# }
+else{
 	push (@trainingcourses, $courses_master_list[0]);
-	push (@testingcourses, @courses_master_list[1..13]);
+	push (@testingcourses, @courses_master_list[1..$#courses_master_list]);
 }
 
 my @additive_sequence	= (0,1,3,7,15,31,63,127);
@@ -349,29 +324,15 @@ my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
 my @edm 				= (31);
-my @proposed			= (32, 64, 63, 127);
+my @proposed			= (32, 64, 63, 95, 127);
 my @pdtb_feature		= (64);
-my @iterations			= (31, 32, 64, 63, 127);
+my @iterations			= (31, 32, 64, 63, 95, 127);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
 	print "\n\n Did you forget to switch 'allf' on?";
 	Help();
 	exit(0);
-}
-
-#test run config
-if ($test){
-	#testing using synthetics data
-	my @test = (1);
-	@iterations		= @test;
-	$corpus_name	= 'testcorpus';
-	@courses_master_list 		=	('TOYCOURSE');
-}
-elsif($pilot){	
-	@iterations			 =  (0);
-	$corpus_name		 =  'pilotcorpus';
-	@courses_master_list =	('ml-005');	
 }
 
 # CREATE MULTIPLE TEST AND TRAINING DATASETS FROM THE OVERALL
@@ -417,23 +378,14 @@ foreach my $type ("train","test"){
 	for(my $fold = $start_index; $fold < $end_index; $fold ++){
 		my $courses = $datasets{"$type$fold"};
 		my $corpus	= $datasets{"train$fold"};
-		$tmp_file 		= "$path/../experiments/tmp_file/tmp_samples_$corpus_name"."_$courses->[0]"."_$type"."_$fold";
-		$error_log_file	= "$path/../experiments/coursewise/error_$corpus_name"."_$courses->[0]"."_$type"."_$fold";
-
+		$tmp_file 	= "$path/../tmp_file/tmp_samples_$corpus_name"."_$type"."_$fold";		
+		
 		print "\nsampling $type instances";
 		if ($type eq "test" && !$hold_out_test){
 			foreach my $course (@$courses){
 				push (@$corpus, $course);
 			}
 		}
-		
-		if(@$corpus > 1){
-			$corpus_type	=	'cross';
-		}
-		else{
-			$corpus_type	=	'single';
-		}
-		print "\n Setting corpus as $corpus_type";
 		
 		my %course_samples 		= ();
 		my %allthreads 			= ();
@@ -525,23 +477,14 @@ foreach my $type ("train","test"){
 		if (keys %allthreads == 0 ){
 			die "\nException: No threads found!";
 		}
-		
-		my $max_thread_sample_id = keys %allthreads;
-		if ($hold_out_test){
-			print "\n Picking out a held out sample from $max_thread_sample_id threads \n";
-			%held_out_data_keys = %{randomSample($max_thread_sample_id)};
-		}
-		
+			
 		foreach my $iter (@iterations){
 			my($d0,$d1,$d2,$d3,$d4,$d5,$d6,$d7,$d8,$d9,$d10) = getBin($iter);
-			
-			$outfile = $exp_path . "/uni";
-			
-			if ($test){
-				print "\n Test ";
-			}
-			
 			print "\n Iteration $iter begins. Set $d0-$d1-$d2-$d3-$d4-$d5-$d6-$d7-$d8-$d9-$d10";
+			
+			if($unigrams){
+				$outfile .= "uni+";
+			}
 			
 			if($allfeatures){
 			
