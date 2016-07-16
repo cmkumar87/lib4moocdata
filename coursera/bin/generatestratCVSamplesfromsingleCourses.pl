@@ -182,9 +182,9 @@ my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
 my @edm 				= (31);
-my @proposed			= (32, 64, 63, 127);
+my @proposed			= (32, 64, 63, 95, 127);
 my @pdtb_feature		= (64);
-my @iterations			= (31,32, 64, 63, 127);
+my @iterations			= (0,95);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -387,12 +387,6 @@ foreach my $type ("test","training"){
 			my($d0,$d1,$d2,$d3,$d4,$d5,$d6,$d7,$d8,$d9,$d10) = getBin($iter);
 			print "\n Iteration $iter begins. Set $d0-$d1-$d2-$d3-$d4-$d5-$d6-$d7-$d8-$d9-$d10";
 			
-			$outfile = $exp_path . "/";
-			
-			if($unigrams){
-				$outfile .= "uni+";
-			}
-			
 			if($allfeatures){
 				$forumtype 			= $d0;
 				$affirmations 		= $d1;
@@ -416,6 +410,11 @@ foreach my $type ("test","training"){
 					# print "\n $file \t $removed_files->{$file}";
 				# }
 				# exit(0);
+			}
+
+			$outfile = "$exp_path/";
+			if($unigrams){
+				$outfile .= "uni+";
 			}
 			
 			# output file			
