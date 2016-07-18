@@ -325,7 +325,7 @@ my @the_rest			= (3,7,15,31);
 my @edm 				= (31);
 my @proposed			= (32, 64, 63, 95, 127);
 my @pdtb_feature		= (64);
-my @iterations			= (0);
+my @iterations			= (0, 31, 32, 64, 63, 95, 127);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
