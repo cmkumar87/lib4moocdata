@@ -150,7 +150,6 @@ my $log_file_name 	= "$progname"."_$courseid";
 open (my $log ,">$path/../logs/$log_file_name.log")
 				or die "cannot open file $path/../logs/$log_file_name.log for writing";
 
-
 if($allfeatures){
 	print $log "\n May include non-unigram features: tftype: $tftype idftype:$idftype\n";
 }
@@ -163,7 +162,7 @@ if(!defined $dbname){
 	print "\n Exception: dbname not defined"; exit(0);
 }
 
-my $db_path		= $path."/../data";
+my $db_path		= "$path/../data";
 my $dbh 		= Model::getDBHandle($db_path,undef,undef,$dbname);
 
 # Next sample from threads of those n courses
@@ -700,7 +699,7 @@ sub readRemovedFiles{
 		if ($line =~ /^\s*$/){ next; }
 		if ($line =~ /^Folder.*$/){ next; }
 		$line	=~ s/^(.*)?\.txt$/$1/;
-		$removed_files {$line} = 1;
+		$removed_files{$courseid}{$line} = 1;
 	}
 	close $rem_fh;
 	return \%removed_files;

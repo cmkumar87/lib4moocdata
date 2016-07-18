@@ -345,12 +345,12 @@ sub generateTrainingFile{
 				my @relations = ('expansion','contingency','temporal','comparison');
 				
 				#skip removed files. These are files that failed to be parsed by the PDTB parser
-				if(exists $removed_files->{$threadid}){
+				if(exists $removed_files->{$courseid}{$threadid}){
 					next;
 				}
 				
-				open (my $SENSE_FILE, "<$pdtbfilepath/$forumid_number/output/$threadid".".txt.exp2.out")
-					or die "\n Cannot open file spans at $pdtbfilepath/$forumid_number/output/$threadid.txt.exp2.out \n $!";
+				open (my $SENSE_FILE, "<$pdtbfilepath/$courseid"."_pdtbinput/"."$forumid_number/output/$threadid".".txt.exp2.out")
+					or die "\n Cannot open file spans at $pdtbfilepath/$courseid"."_pdtbinput/"."$forumid_number/output/$threadid".".txt.exp2.out \n $!";
 				
 				$pdtbrelation{$docid}{'expansion'}		= 0;
 				$pdtbrelation{$docid}{'contingency'}	= 0;

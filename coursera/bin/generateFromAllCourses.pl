@@ -27,7 +27,7 @@ BEGIN{
 }
 
 use lib "$path/../lib";
-use FeatureExtraction_Norm;
+use FeatureExtraction;
 use Model;
 use Utility;
 
@@ -59,11 +59,9 @@ sub Help{
 my $help				= 0;
 my $quite				= 0;
 my $debug				= 0;
-my $test				= 0;
-my $pilot				= 0;
+my $dbname				= undef;
 my $corpus_name			= undef;
 
-my $num_samples_g		= undef;
 my $samplemode 			= 'all';
 my $freqcutoff 			= undef;
 my $stem				= 0;
@@ -72,14 +70,16 @@ my $term_length_cutoff	= 2;
 my $idftype				= 'none';
 
 my $numposts			= 0;
+my $forumtype			= 0;
+my $affirmations		= 0;
+my $nonterm_courseref 	= 0;
 my $tprop				= 0;
 my $numw				= 0;
 my $numsentences 		= 0;
 my $pdtb 				= 0;
+my $agree				= 0;
 
-my $forumtype			= 0;
 my $courseref			= 0;
-my $nonterm_courseref 	= 0;
 my $unigrams			= 0;
 my $bigrams				= 0;
 
@@ -99,7 +99,7 @@ my $tftab;
 
 $help = 1 unless GetOptions(
 				'corpus=s'		=> 	\$corpus_name,
-				#'n=i'			=>	\$num_samples_g,
+				'dbname=s'		=>	\$dbname,
 				'folds=i'		=>	\$num_folds,
 				'holdc'			=>	\$hold_out_course,
 				'sindex=i'		=>	\$start_index,	# index to start the cv loop at
@@ -125,8 +125,6 @@ $help = 1 unless GetOptions(
 				'stem'			=>	\$stem,
 				#features end here
 				'debug'			=>	\$debug,
-				'test'			=>	\$test, #tests using synthetics data
-				'pilot'			=>	\$pilot, #pilotrun using one course's data
 				'h' 			=>	\$help,
 				'q' 			=>	\$quite
 			);
@@ -146,19 +144,20 @@ if (!$quite){
 	License();
 }
 
-
+my $error_log_file	= "$path/../logs/$progname"."_$corpus_name".".err.log";
+my $log_file_name 	= "$progname"."_$corpus_name";
+open (my $log ,">$path/../logs/$log_file_name.log")
+				or die "cannot open file $path/../logs/$log_file_name.log for writing";
+				
 if($allfeatures){
 	print "May include non-unigram features: tftype: $tftype idftype:$idftype\n";
+	print $log "May include non-unigram features: tftype: $tftype idftype:$idftype\n";
 }
 elsif($unigrams){
 	print "unigram features only: tftype: $tftype idftype:$idftype\n";
+	print $log "unigram features only: tftype: $tftype idftype:$idftype\n";
 }
-
-my $error_log_file	= "$path/../logs/$progname"."_$courseid".".err.log";
-my $log_file_name 	= "$progname"."_$courseid";
-open (my $log ,">$path/../logs/$log_file_name.log")
-				or die "cannot open file $path/../logs/$log_file_name.log for writing";
-
+				
 mkdir("$path/../experiments");
 my $exp_path 		= "$path/../experiments/";
 
@@ -167,8 +166,13 @@ my $tmp_file 		= "$path/../tmp_file/tmp_samples_$corpus_name";
 my $pdtbfilepath	= "$path/..";
 $outfile 			= "../experiments/";
 
-my $db_path			= $path."/../data/testdb";
-my $dbh = Model::getDBHandle($db_path,undef,undef,'cs6207.db');
+if(!defined $dbname){
+	print $log "\n Exception: dbname not defined";
+	print "\n Exception: dbname not defined"; exit(0);
+}
+
+my $db_path		= "$path/../data";
+my $dbh 		= Model::getDBHandle($db_path,undef,undef,$dbname);
 
 my $dt = DateTime->new( year => 1970, month => 1, day => 1 );
 my $dateformatter = DateTime::Format::Epoch->new(
@@ -237,7 +241,7 @@ if ($corpus_name eq 'd61'){
 								'statinference-002',
 								'virtualassessment-001',
 								'warhol-001',
-								'matrix-001'
+								'matrix-001',
 								'ml-005',
 								'rprog-003',		
 								'calc1-003',
@@ -263,7 +267,7 @@ elsif($corpus_name eq 'd14'){
 							'compilers-004',			
 							'maththink-004',
 							'bioelectricity-002',
-							'musicproduction-006'
+							'musicproduction-006',
 							'medicalneuro-002',
 							'comparch-002',
 							'gametheory2-001',
@@ -273,10 +277,10 @@ elsif($corpus_name eq 'd14'){
 							);
 }
 elsif($corpus_name eq 'nus'){
-		@courses_master_list = ( 'classicalcomp-001',
-								 'classicalcomp-002',
-								 'reasonandpersuasion-001',
-								 'reasonandpersuasion-002'
+		@courses_master_list = (  'classicalcomp-001'
+								 ,'classicalcomp-002'
+								 # ,'reasonandpersuasion-001'
+								 ,'reasonandpersuasion-002'
 								)
 }
 elsif($corpus_name eq 'pitt'){
@@ -303,15 +307,10 @@ my @testingcourses;
 
 if( $hold_out_course && $corpus_name eq 'd61'){
 	push (@trainingcourses, @courses_master_list[0..46]);
-	push (@testingcourses, @courses_master_list[47..60]);
+	push (@testingcourses, @courses_master_list[47..$#courses_master_list]);
 }
-# elsif( $hold_out_course && $corpus_name eq 'd14'){
-	# push (@trainingcourses, $courses_master_list[0]);
-	# push (@testingcourses, @courses_master_list[1..13]);
-# }
 else{
-	push (@trainingcourses, $courses_master_list[0]);
-	push (@testingcourses, @courses_master_list[1..$#courses_master_list]);
+	push (@testingcourses, @courses_master_list[0..$#courses_master_list]);
 }
 
 my @additive_sequence	= (0,1,3,7,15,31,63,127);
@@ -326,7 +325,7 @@ my @the_rest			= (3,7,15,31);
 my @edm 				= (31);
 my @proposed			= (32, 64, 63, 95, 127);
 my @pdtb_feature		= (64);
-my @iterations			= (31, 32, 64, 63, 95, 127);
+my @iterations			= (0);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -348,10 +347,12 @@ if ($num_folds > $num_courses){
 }
 my $fold_size = int($num_courses / $num_folds);
 print "\nNum folds: $num_folds \t Fold size: $fold_size \t \n";
+print $log "\nNum folds: $num_folds \t Fold size: $fold_size \t \n";
 
 if(!defined $end_index){
 	$end_index = $num_folds;
 	print "\n assigning end index to $num_folds";
+	print $log "\n assigning end index to $num_folds";
 }
 
 for(my $index = $start_index; $index < $end_index; $index ++){
@@ -360,8 +361,8 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 	
 	$datasets{"test$index"} =  $test_set;
 	$datasets{"train$index"} = $training_set;
-	#print "\n@$test_set";
-	#print "\n@$training_set";
+	print "\n@$test_set";
+	print "\n@$training_set";
 }
 
 print "\n train and test datasets identified";
@@ -374,6 +375,9 @@ my $threadsquery = 	"select docid, courseid, id,
 my $threadssth = $dbh->prepare($threadsquery) 
 					or die "prepare failed \n $!\n";
 
+#hashmap of removed file
+my $removed_files;
+					
 foreach my $type ("train","test"){
 	for(my $fold = $start_index; $fold < $end_index; $fold ++){
 		my $courses = $datasets{"$type$fold"};
@@ -381,10 +385,15 @@ foreach my $type ("train","test"){
 		$tmp_file 	= "$path/../tmp_file/tmp_samples_$corpus_name"."_$type"."_$fold";		
 		
 		print "\nsampling $type instances";
-		if ($type eq "test" && !$hold_out_test){
+		if ($type eq "test"){
 			foreach my $course (@$courses){
 				push (@$corpus, $course);
 			}
+		}
+		
+		$removed_files = readRemovedFiles($courses);
+		if(keys %{$removed_files} eq 0){
+			print "\n Warning: no removed files found";
 		}
 		
 		my %course_samples 		= ();
@@ -482,12 +491,12 @@ foreach my $type ("train","test"){
 			my($d0,$d1,$d2,$d3,$d4,$d5,$d6,$d7,$d8,$d9,$d10) = getBin($iter);
 			print "\n Iteration $iter begins. Set $d0-$d1-$d2-$d3-$d4-$d5-$d6-$d7-$d8-$d9-$d10";
 			
+			$outfile = "$exp_path/";
 			if($unigrams){
 				$outfile .= "uni+";
 			}
 			
 			if($allfeatures){
-			
 				$forumtype 			= $d0;
 				$affirmations 		= $d1;
 				$tprop	 			= $d2;
@@ -495,19 +504,9 @@ foreach my $type ("train","test"){
 				$nonterm_courseref	= $d4;
 				$agree				= $d5;
 				$pdtb 				= $d6;
-				
-				# $forumtype 		 	= $d0;
-				# $affirmations 	 	= $d1;
-				# $tprop	 		 	= $d2;
-				# $numsentences 	 	= $d3;
-				# $nonterm_courseref 	= $d4;
-				# $courseref 		 	= $d5;
-				# $positionbias 	 	= $d6;
-				# $recency		 	= $d7;
-				# $intervention_delay	= $d8;
 			}
-			# output file
 			
+			# output file
 			$outfile  .=  $d0 	? "forum+"			: "";
 			$outfile  .=  $d1 	? "affir+"  		: "";	
 			$outfile  .=  $d2 	? "tprop+"			: "";
@@ -517,12 +516,7 @@ foreach my $type ("train","test"){
 			$outfile  .=  $d6 	? "pdtb+"	 		: "";
 			$outfile  .=  $d7	? "course+" 		: "";
 			
-			$outfile	.=  "_".$type."_".$fold;
-			if($test){
-				$outfile .= "_TEST";
-			}
-			
-			$outfile .= "_". $courses->[$fold] . ".txt";
+			$outfile	.=  "_$type" . "_$fold .txt";
 			
 			#feature name file
 			my $feature_file = "features";
@@ -535,12 +529,8 @@ foreach my $type ("train","test"){
 			$feature_file .= $d5 	? "+agree"		: "";
 			$feature_file .= $d6 	? "+pdtb"	 	: "";
 			$feature_file .= $d7	? "+course" 	: "";
-			
-			if($test){
-				$feature_file .= "_TEST";
-			}
-			
-			$feature_file .= "_". $courses->[$fold] . ".txt";
+
+			$feature_file .= "_$fold.txt";
 			
 			my %samples = ();
 			my @positivethreads;
@@ -661,32 +651,10 @@ sub getTrainTestCourseSetsHO{
 	splice @testingcourseslocal, $fold, 1;
 	push (@trainingset, @trainingcourseslocal, @testingcourseslocal);
 
-	print "\n\n ". (scalar @trainingset);
-	print "\n". (scalar @testset);
+	# print "\n\n train set for $fold". (scalar @trainingset);
+	# print "\n test set for $fold". (scalar @testset);
 	
 	return(\@trainingset,\@testset);
-}
-
-sub randomSample{
-	my ($max) = @_;
-	my $rc = 1;
-	my $seed = 458314;	
-	#20% of threads
-	my $num_samples_g = int($max * (20/100));
-	
-	print "\n $max \t $num_samples_g \n";
-	my %samples = ();
-	
-	while($num_samples_g > 0){
-		srand($seed*$rc); $rc++;
-		my $rand = int(rand($max));
-		
-		if( !exists $samples{$rand} ){
-			$samples{$rand} = 1;
-		}
-		$num_samples_g--;
-	}
-	return \%samples;
 }
 
 sub addtosample{
@@ -712,6 +680,25 @@ sub addtosample{
 
 	push (@$threads, [$threadid,$docid,$courseid,$label,$forumname,$forumidnumber,$serial_id]);
 	$samples->{$serial_id} = 1;
+}
+
+sub readRemovedFiles{
+	my ($courses) = @_;
+	my %removed_files = ();
+	foreach my $courseid (@$courses){
+		open( my $rem_fh, "<$path/../data/Removed_files_$courseid".".txt") 
+				or die "\n Cannot open $path/../data/Removed_files_$courseid.txt";
+		while (my $line = <$rem_fh>){
+			chomp $line;
+			if ($line =~ /^$/){ next; }
+			if ($line =~ /^\s*$/){ next; }
+			if ($line =~ /^Folder.*$/){ next; }
+			$line	=~ s/^(.*)?\.txt$/$1/;
+			$removed_files {$courseid}{$line} = 1;
+		}
+		close $rem_fh;
+	}
+	return \%removed_files;
 }
 
 sub getBin{
