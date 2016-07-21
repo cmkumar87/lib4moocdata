@@ -145,7 +145,7 @@ else{
 }
 
 my $error_log_file	= "$path/../logs/$progname"."_$courseid".".err.log";
-my $pdtbfilepath	= "$path/../$courseid"."_pdtbinput";
+my $pdtbfilepath	= "$path/..";
 my $log_file_name 	= "$progname"."_$courseid";
 open (my $log ,">$path/../logs/$log_file_name.log")
 				or die "cannot open file $path/../logs/$log_file_name.log for writing";
@@ -372,7 +372,7 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 #hashmap of removed file
 my $removed_files;
 $removed_files = readRemovedFiles();
-if(keys %{$removed_files} eq 0){
+if(keys %{$removed_files->{$courseid}} eq 0){
 	print "\n Error: no removed files found";
 	exit(0);
 }
