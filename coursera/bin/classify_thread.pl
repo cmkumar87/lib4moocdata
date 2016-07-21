@@ -57,8 +57,6 @@ my $in1 		= undef;
 my $in2 		= undef;
 my $stem 		= 0;
 my $weighing 	= 'none';
-my $test 		= 0;
-my $pilot 		= 0;
 my $dbname		= undef;
 my $incourse;
 
@@ -72,8 +70,6 @@ $help = 1 unless GetOptions(
 				'stem'		=>	\$stem,
 				'i'			=>	\$interactive,
 				'w=s'		=>	\$weighing,
-				'test'		=>	\$test,
-				'pilot'		=>	\$pilot,
 				'debug'		=>	\$debug,
 				'h' 		=>	\$help,
 				'q' 		=>	\$quite

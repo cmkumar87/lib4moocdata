@@ -279,7 +279,7 @@ elsif($corpus_name eq 'd14'){
 elsif($corpus_name eq 'nus'){
 		@courses_master_list = (  'classicalcomp-001'
 								 ,'classicalcomp-002'
-								 # ,'reasonandpersuasion-001'
+								 ,'reasonandpersuasion-001'
 								 ,'reasonandpersuasion-002'
 								)
 }
