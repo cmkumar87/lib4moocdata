@@ -184,14 +184,14 @@ elsif ($corpus_name eq 'd14'){
 				 );
 }
 elsif($corpus_name eq 'nus'){
-		@courses_master_list = (  'classicalcomp-001'
+		@courses = (  'classicalcomp-001'
 								 ,'classicalcomp-002'
 								 ,'reasonandpersuasion-001'
 								 ,'reasonandpersuasion-002'
 								)
 }
 elsif($corpus_name eq 'pitt'){
-		@courses_master_list = ( 'accountabletalk-001',
+		@courses = ( 'accountabletalk-001',
 								  'clinicalterminology-001',
 								  'clinicalterminology-002',
 								  'disasterprep-001',
@@ -236,7 +236,7 @@ print $con_matrices_file "Course \t Weight \t True +ve \t True -ve \t False +ve 
 	# or die "cannot open $experiments_path/results....txt";
 
 my $terms;
-$terms = Model::getalltermIDF($dbh,undef,0,\@courses);
+# $terms = Model::getalltermIDF($dbh,undef,0,\@courses);
 
 foreach my $i (0..($num_folds-1)){
 	my $weight		= 1;
@@ -244,7 +244,7 @@ foreach my $i (0..($num_folds-1)){
 	
 	print $con_matrices_file "\n $courses[$i] \t";
 	my $lastname	= (split(/_train/,$in1))[1];
-	$lastname =~ s/(\_).*\.?(txt)/$1$courses[$i].$2/;
+	$lastname =~ s/(\_).*\.?(txt)/$1$i.$2/;
 	
 	# print "\n $lastname"; next;
 	
