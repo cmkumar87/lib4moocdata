@@ -11,7 +11,7 @@ from MOOC forums”. In *Proceedings of the 8th International Conference on Educ
 Mining, Madrid, Spain*. pp. 218-225. International Education Data Mining Society.
 
 <h3>Coursera data export</h3>
-Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MySQL databases.
+To use this library you need to procure data dumps of MOOCs you won from Coursera. Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MySQL databases.
 A typical data export consists of the following .sql files
 <ol>
 <li> &lt;Full_Coursename&gt;(&lt;coursecode&gt;)_SQL_anonymized_forum.sql </li>
