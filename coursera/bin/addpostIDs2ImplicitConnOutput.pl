@@ -152,7 +152,7 @@ foreach my $forum_id ( sort @$forums){
 		#if( -e "$out_file_path/$thread_id.txt.exp2.out" ){ next; }
 		print $log "\n Doing $thread_id in $forum_id";
 		
-		open (my $SENSEFILE, "<$out_file_path/$thread_id.txt.exp.out") 
+		open (my $SENSEFILE, "<$out_file_path/$thread_id.txt.nonexp.out") 
 					or die "\n Cannot read file $out_file_path/$thread_id \n $!";
 		my $sense_counter  = 0;
 		my %senses = ();
@@ -185,43 +185,48 @@ foreach my $forum_id ( sort @$forums){
 			exit(0);			
 		}
 		
-		my %connective_label = ();
-		my $conn_counter = 0;
-		open (my $SPANFILE, "<$out_file_path/$thread_id.txt.conn.out") 
-								or die "\n Cannot open read file pdtbinput at $out_file_path \n $!";
+		# my %connective_label = ();
+		# my $conn_counter = 0;
+		# open (my $SPANFILE, "<$out_file_path/$thread_id.txt.conn.out") 
+								# or die "\n Cannot open read file pdtbinput at $out_file_path \n $!";
 								
-		while (my $line = <$SPANFILE>){
-			my @fields = split (/\s+/, $line) ;
-			$connective_label{$conn_counter} = $fields[2];
-			$conn_counter ++;
-		}
-		close $SPANFILE;
+		# while (my $line = <$SPANFILE>){
+			# my @fields = split (/\s+/, $line) ;
+			# $connective_label{$conn_counter} = $fields[2];
+			# $conn_counter ++;
+		# }
+		# close $SPANFILE;
 
-		$conn_counter = 0;
 		$sense_counter = 0;
-		open (my $SPANFILE2, "<$out_file_path/$thread_id.txt.conn.spans") 
+		open (my $SPANFILE2, "<$out_file_path/$thread_id.txt.nonexp.res") 
 								or die "\n Cannot open read file pdtbinput at $out_file_path \n $!";
 		
-		open (my $FHOUT, ">$out_file_path/$thread_id.txt.exp2.out") 
+		open (my $FHOUT, ">$out_file_path/$thread_id.txt.nonexp2.out") 
 								or die "\n Cannot open write file pdtbinput at $out_file_path \n $!";	
 				
 		while (my $line = <$SPANFILE2>){
-			if($connective_label{$conn_counter} eq 0){ $conn_counter ++; next; }
-			$line =~ s/\;/ /g;
-			my @fields 		= split (/\s+/, $line) ;
-			my $span_string = $fields[0];
+			# if($connective_label{$conn_counter} eq 0){ $conn_counter ++; next; }
+			my @fields 		= split (/\|/, $line) ;
+			
+			my $span_string = $fields[22];
 
 			my @spans 		= split (/\.\./, $span_string);
 			
+			my $search_flag = 0;
 			foreach my $post_counter (sort {$a <=> $b} keys %$post_spans){
 				my $bol = $post_spans->{$post_counter}{'bol'};
 				my $eol = $post_spans->{$post_counter}{'eol'};
+				if(!defined $spans[0]){	print $log "#BLANK \t $senses{$sense_counter}"; last;}
 				if ($spans[0] >= $bol && $spans[1] <= $eol){
 					print $FHOUT "$post_ids{$post_counter} \t $senses{$sense_counter}";
+					$search_flag = 1;
 					last;
 				}
 			}
-			$conn_counter ++;
+			if( $search_flag eq 0 && defined $spans[0]){
+				print $log  "NOTFOUND \t $senses{$sense_counter}";
+			}
+			
 			$sense_counter++;
 		}
 
@@ -236,15 +241,15 @@ close $log;
 print "\n ##Done##";
 
 sub getspans{
-	my ($thread_id,$txt_file_path) = @_;
+	my ( $thread_id, $txt_file_path ) = @_;
 	my %post_spans = ();
-	open (my $ORIGFILE, "<$txt_file_path/$thread_id.txt") 
+	open ( my $ORIGFILE, "<$txt_file_path/$thread_id.txt" ) 
 					or die "\n Cannot read file $txt_file_path/$thread_id.txt $!";
 	my $offset 			= 0;
 	my $post_counter	= 1;	
 	
 	my $even_line = 1;
-	while (my $line = <$ORIGFILE>){
+	while ( my $line = <$ORIGFILE> ){
 		if( !$even_line ){
 			$post_counter ++; 
 			$even_line = 1;

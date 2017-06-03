@@ -293,7 +293,6 @@ foreach my $i (0..($num_folds-1)){
 		else{
 			$trainingset_distribution{'-'} ++;
 		}
-		$training_data->{$doc_id};
 		print TRAIN "$training_data->{$doc_id}\n";
 	}
 	close TRAIN;
@@ -318,6 +317,9 @@ foreach my $i (0..($num_folds-1)){
 	}
 	elsif ($weighing eq 'nve'){
 			$weight =  $init_weight;
+	}
+	elsif ($weighing eq 'none'){
+			$weight =  1;
 	}
 	else{
 		print "\n Invalid value for option -w (class weight) \n";

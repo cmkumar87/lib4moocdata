@@ -42,7 +42,7 @@ sub generateTrainingFile{
 			$tlength, $forumtype,
 			$path, $feature_file,
 			$course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-			$debug, $pdtb, $pdtbfilepath, $removed_files, $print_format
+			$debug, $pdtb_exp, $pdtb_imp, $pdtbfilepath, $removed_files, $print_format
 		) = @_;
 
 	my @courses = keys %{$course_samples};
@@ -76,7 +76,7 @@ sub generateTrainingFile{
 	my $lengthf = 0;
 	my $time	= 0;
 	
-	if ( $courseref || $nonterm_courseref || $agree || $affir || $pdtb){
+	if ( $courseref || $nonterm_courseref || $agree || $affir || $pdtb_exp || $pdtb_imp){
 		 $lexical = 1;
 	}
 	
@@ -112,6 +112,7 @@ sub generateTrainingFile{
 	# pdtb discourse connectives and relations
 	my %pdtbconnectives	= ();
 	my %pdtbrelation	= ();
+	my %pdtbrelation_imp= ();
 	my %postwise_agreements = ();
 	
 	#lexical features
@@ -156,6 +157,12 @@ sub generateTrainingFile{
 	my $maxpdtbtemporal		= 0;			my $minpdtbtemporal		= 999999;
 	my $maxpdtbcontrast		= 0;			my $minpdtbcontrast		= 999999;
 	my $maxpdtball 			= 0;			my $minpdtball 			= 999999;
+
+	my $maxpdtbimpexpansion		= 0;			my $minpdtbimpexpansion		= 999999;
+	my $maxpdtbimpcontingency	= 0;			my $minpdtbimpcontingency	= 999999;
+	my $maxpdtbimptemporal		= 0;			my $minpdtbimptemporal		= 999999;
+	my $maxpdtbimpcontrast		= 0;			my $minpdtbimpcontrast		= 999999;
+	my $maxpdtbimpall 			= 0;			my $minpdtbimpall 			= 999999;
 	
 	## Coursewise max-mins
 	my %maxnum_urlref			= ();	my %minnum_urlref	= ();
@@ -340,7 +347,7 @@ sub generateTrainingFile{
 				print LOG "Empty thread: $docid $courseid $threadid \n"; next;
 			}
 		
-			if($pdtb){
+			if($pdtb_exp){
 				#initialization
 				my @relations = ('expansion','contingency','temporal','comparison');
 				
@@ -431,7 +438,103 @@ sub generateTrainingFile{
 					$pdtbrelation{$docid}{'compden'}		= 0;
 				}
 			}
-		
+			
+			if($pdtb_imp){
+				#initialization
+				my @relations = ('expansion','contingency','temporal','comparison','norel','entrel');
+				
+				#skip removed files. These are files that failed to be parsed by the PDTB parser
+				if(exists $removed_files->{$courseid}{$threadid}){
+					next;
+				}
+				
+				open (my $SENSE_FILE, "<$pdtbfilepath/$courseid"."_pdtbinput/"."$forumid_number/output/$threadid".".txt.nonexp2.out")
+					or die "\n Cannot open file spans at $pdtbfilepath/$courseid"."_pdtbinput/"."$forumid_number/output/$threadid".".txt.nonexp2.out \n $!";
+				
+				$pdtbrelation_imp{$docid}{'expansion'}		= 0;
+				$pdtbrelation_imp{$docid}{'contingency'}	= 0;
+				$pdtbrelation_imp{$docid}{'temporal'}		= 0;
+				$pdtbrelation_imp{$docid}{'contrast'} 		= 0;
+				
+				$pdtbrelation_imp{$docid}{'all'} 			= 0;
+				$pdtbrelation_imp{$docid}{'biall'}			= 0;
+				
+				#initialization of bi relations to 0
+				foreach my $relation1 (@relations){
+					foreach my $relation2 (@relations){
+						$pdtbrelation_imp{$docid}{$relation1.$relation2."den"}	= 0;
+					}
+				}
+				
+				my $prev_sense = undef;
+				while (my $line = <$SENSE_FILE>){
+					my @fields = split /\s+/,$line;
+					my $relation_post = $fields[0];
+					$fields[7] = lc($fields[7]);
+					
+					#skips relations from posts not in truncated intervened threads
+					if(!exists $posts->{$relation_post}){ next; } 
+					
+					#skip entity relations as they are not discourse connectives
+					if ($fields[7] eq 'entrel' || $fields[7] eq 'norel'){ next; }
+					
+					if ($fields[7] eq 'expansion'){
+						$pdtbrelation_imp{$docid}{'expansion'} ++;
+					}
+					elsif ($fields[7] eq 'contingency'){
+						$pdtbrelation_imp{$docid}{'contingency'} ++;
+					}
+					elsif ($fields[7] eq 'temporal'){
+						$pdtbrelation_imp{$docid}{'temporal'} ++;
+					}
+					elsif ($fields[7] eq 'comparison'){
+						$pdtbrelation_imp{$docid}{'contrast'} ++;
+					}
+					else{
+						print "\n Unknown pdtb relation  $fields[7] in post $fields[0] $threadid of forum $forumid_number";
+						exit(0);
+					}
+					$pdtbrelation_imp{$docid}{'all'}++;
+					
+					if(defined $prev_sense){
+						$pdtbrelation_imp{$docid}{$prev_sense.$fields[7]."den"}++;
+						$pdtbrelation_imp{$docid}{'biall'}++;
+					}
+					$prev_sense = $fields[7];
+				}
+				close $SENSE_FILE;
+				
+				#normalisation by sum of number of posts and comments
+				foreach my $relation (sort keys %{$pdtbrelation_imp{$docid}}){
+					$pdtbrelation_imp{$docid}{$relation} = 
+						$pdtbrelation_imp{$docid}{$relation}  / $numposts{$docid};
+				}
+				
+				# make pdtb densities: birelations
+				if($pdtbrelation_imp{$docid}{'biall'} > 0){
+					foreach my $relation (sort keys %{$pdtbrelation_imp{$docid}}){
+						if(	$relation =~ /den$/){
+							$pdtbrelation_imp{$docid}{ $relation} = 
+							$pdtbrelation_imp{$docid}{ $relation }/$pdtbrelation_imp{$docid}{'biall'};
+						}
+					}
+				}
+				
+				# make pdtb densities: uni relations
+				if($pdtbrelation_imp{$docid}{'all'} > 0){
+					$pdtbrelation_imp{$docid}{'expden'}		= $pdtbrelation_imp{$docid}{'expansion'}	/$pdtbrelation_imp{$docid}{'all'};
+					$pdtbrelation_imp{$docid}{'contden'}	= $pdtbrelation_imp{$docid}{'contingency'} /$pdtbrelation_imp{$docid}{'all'};
+					$pdtbrelation_imp{$docid}{'tempden'}	= $pdtbrelation_imp{$docid}{'temporal'}	/$pdtbrelation_imp{$docid}{'all'};
+					$pdtbrelation_imp{$docid}{'compden'}	= $pdtbrelation_imp{$docid}{'contrast'}	/$pdtbrelation_imp{$docid}{'all'};	
+				}
+				else{
+					$pdtbrelation_imp{$docid}{'expden'}			= 0;
+					$pdtbrelation_imp{$docid}{'contden'}		= 0;
+					$pdtbrelation_imp{$docid}{'tempden'}		= 0;
+					$pdtbrelation_imp{$docid}{'compden'}		= 0;
+				}
+			}
+			
 			foreach my $post ( sort {$a <=> $b} keys %$posts){
 				my $postText = $posts->{$post}{'post_text'};
 				$postText = Preprocess::replaceURL($postText);
@@ -521,7 +624,7 @@ sub generateTrainingFile{
 			
 			my $thread_length_nomalizer = $thread_length{$docid};
 
-			if($pdtb){
+			if($pdtb_exp){
 				($maxpdtbexpansion, $minpdtbexpansion) 
 					= 	getMaxMin(	$pdtbrelation{$docid}{'expansion'},
 									$maxpdtbexpansion,
@@ -552,6 +655,40 @@ sub generateTrainingFile{
 									$maxpdtball,
 									$minpdtball,
 									"pdtb_all"
+								 );					
+			}
+			
+			if($pdtb_imp){
+				($maxpdtbimpexpansion, $minpdtbimpexpansion) 
+					= 	getMaxMin(	$pdtbrelation_imp{$docid}{'expansion'},
+									$maxpdtbimpexpansion,
+									$minpdtbimpexpansion,
+									"pdtb_expansion"
+								 );
+				($maxpdtbimpcontingency, $minpdtbimpcontingency) 
+					= 	getMaxMin(	$pdtbrelation_imp{$docid}{'contingency'},
+									$maxpdtbimpcontingency,
+									$minpdtbimpcontingency,
+									"pdtb_contingency"
+								 );
+				($maxpdtbimptemporal, $minpdtbimptemporal) 
+					= 	getMaxMin(	$pdtbrelation_imp{$docid}{'temporal'} ,
+									$maxpdtbimptemporal,
+									$minpdtbimptemporal,
+									"pdtb_temporal"
+								 );
+				($maxpdtbimpcontrast, $minpdtbimpcontrast) 
+					= 	getMaxMin(	$pdtbrelation_imp{$docid}{'contrast'} ,
+									$maxpdtbimpcontrast,
+									$minpdtbimpcontrast,
+									"pdtb_contrast"
+								 );
+								 
+				($maxpdtbimpall, $minpdtbimpall) 
+					= 	getMaxMin(	$pdtbrelation_imp{$docid}{'all'} ,
+									$maxpdtbimpall,
+									$minpdtbimpall,
+									"pdtb_imp_all"
 								 );					
 			}
 			
@@ -763,11 +900,18 @@ sub generateTrainingFile{
 		checkmaxminexception($maxaffirdensity, $minaffirdensity, 'affirmation dentsity');
 	}
 
-	if($pdtb){
+	if($pdtb_exp){
 		print "MAX & MIN pdtb e: $maxpdtbexpansion \t $minpdtbexpansion\n";
 		print "MAX & MIN pdtb c: $maxpdtbcontingency \t $minpdtbcontingency\n";
 		print "MAX & MIN pdtb com: $maxpdtbcontrast \t $minpdtbcontrast\n";
 		print "MAX & MIN pdtb tem: $maxpdtbtemporal \t $minpdtbtemporal\n";
+	}
+
+	if($pdtb_imp){
+		print "MAX & MIN pdtb e: $maxpdtbimpexpansion \t $minpdtbimpexpansion\n";
+		print "MAX & MIN pdtb c: $maxpdtbimpcontingency \t $minpdtbimpcontingency\n";
+		print "MAX & MIN pdtb com: $maxpdtbimpcontrast \t $minpdtbimpcontrast\n";
+		print "MAX & MIN pdtb tem: $maxpdtbimptemporal \t $minpdtbimptemporal\n";
 	}
 	
 	my %nontermfeatures = ();
@@ -931,8 +1075,17 @@ sub generateTrainingFile{
 				}
 			}
 
-		    if($pdtb){
+		    if($pdtb_exp){
 				print $log "adding pdtb relation feature..\n";
+				##afterAAAI changes begin
+				#if(keys %{$pdtbrelation{$docid}} eq 0){
+				#	$nontermfeaturecount+=25;
+				#}
+				#elsif(keys %{$pdtbrelation{$docid}} < 25){
+				#	die "\n Exeption: pdtb feature vector is partially empty";
+				#}
+				##afterAAAI changes end
+				
 				foreach my $relation ( sort keys %{$pdtbrelation{$docid}} ){
 					$nontermfeaturecount++;
 					#print "\n $docid \t $nontermfeaturecount \t $relation";
@@ -985,13 +1138,75 @@ sub generateTrainingFile{
 						next;
 					}
 					else{
-						print $log "\n bad relation. $docid \t $nontermfeaturecount \t $relation";
-						print "\n bad relation. $docid \t $nontermfeaturecount \t $relation";
+						print $log "\n bad exp relation: $relation in $docid \t $nontermfeaturecount \t $relation";
+						print "\n bad exp relation: $relation in $docid \t $nontermfeaturecount \t $relation";
 						exit(0);
 					}
 				}
 			}
+	
+		    if($pdtb_imp){
+				print $log "adding pdtb relation feature..\n";
 				
+				foreach my $relation ( sort keys %{$pdtbrelation_imp{$docid}} ){
+					$nontermfeaturecount++;
+					#print "\n $docid \t $nontermfeaturecount \t $relation";
+					if($relation eq 'expansion'){
+						my $max_minus_min = ($maxpdtbimpexpansion - $minpdtbimpexpansion);
+						if(defined $pdtbrelation_imp{$docid}{'expansion'} && $maxpdtbimpexpansion ne 0){
+							my $normalised = ($pdtbrelation_imp{$docid}{'expansion'} - $minpdtbimpexpansion)/$max_minus_min;
+							$term_vector->{$nontermfeaturecount} = $normalised;
+						}
+						$nontermfeatures{$nontermfeaturecount} = 'pdtbimp:#Expansioninthread';
+					}
+					elsif($relation eq 'contingency'){
+						my $max_minus_min = ($maxpdtbimpcontingency - $minpdtbimpcontingency);
+						if(defined $pdtbrelation_imp{$docid}{'contingency'} && $maxpdtbimpcontingency ne 0){
+							my $normalised = ($pdtbrelation_imp{$docid}{'contingency'} - $minpdtbimpcontingency)/$max_minus_min;
+							$term_vector->{$nontermfeaturecount} = $normalised;
+						}
+						$nontermfeatures{$nontermfeaturecount} = 'pdtbimp:#Contingencyinthread';			
+					}
+					elsif($relation eq 'temporal'){
+						my $max_minus_min = ($maxpdtbimptemporal - $minpdtbimptemporal);
+						if(defined $pdtbrelation_imp{$docid}{'temporal'} && $maxpdtbimptemporal ne 0){
+							my $normalised = ($pdtbrelation_imp{$docid}{'temporal'} - $minpdtbimptemporal)/$max_minus_min;
+							$term_vector->{$nontermfeaturecount} = $normalised;
+						}
+						$nontermfeatures{$nontermfeaturecount} = 'pdtbimp:#Temporalinthread';
+					}
+					elsif($relation eq 'contrast'){
+						my $max_minus_min = ($maxpdtbimpcontrast - $minpdtbimpcontrast);
+						if(defined $pdtbrelation_imp{$docid}{'contrast'} && $maxpdtbimpcontrast ne 0){
+							my $normalised = ($pdtbrelation_imp{$docid}{'contrast'} - $minpdtbimpcontrast)/$max_minus_min;
+							$term_vector->{$nontermfeaturecount} = $normalised;
+						}
+						$nontermfeatures{$nontermfeaturecount} = 'pdtbimp:#Contrastinthread';
+					}
+					elsif($relation eq 'all'){
+						my $max_minus_min = ($maxpdtbimpall - $minpdtbimpall);
+						if(defined $pdtbrelation_imp{$docid}{'all'} && $maxpdtbimpall ne 0){
+							my $normalised = ($pdtbrelation_imp{$docid}{'all'} - $minpdtbimpall)/$max_minus_min;
+							$term_vector->{$nontermfeaturecount} = $normalised;
+						}
+						$nontermfeatures{$nontermfeaturecount} = 'pdtb:#all';
+					}
+					elsif($relation =~ /den$/){
+						$term_vector->{$nontermfeaturecount}	= $pdtbrelation_imp{$docid}{$relation};
+						$nontermfeatures{$nontermfeaturecount}	= $relation;
+					}
+					elsif($relation eq 'biall'){
+						$nontermfeaturecount--;
+						next;
+					}
+					else{
+						print $log "\n bad imp relation: $relation in  $docid \t $nontermfeaturecount \t $relation";
+						print "\n bad imp relation: $relation in $docid \t $nontermfeaturecount \t $relation";
+						exit(0);
+					}
+				}
+			}
+			
 			if($tlength){
 				$nontermfeaturecount++;
 				$term_vector->{$nontermfeaturecount}	= $numposts{$docid};

@@ -193,7 +193,7 @@ foreach my $i (0..($num_folds-1)){
 
 	print "#samples: $number_of_samples \t # Folds: $num_folds \n";
 
-	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_$incourse"."_$weighing.txt") 
+	open (my $output_fold_fh, ">$results_path"."/results_dtl_".(split (/\./,$in1))[0]."_$i"."_$weighing.txt") 
 		or die "cannot open $experiments_path/results_dtl....txt";
 	
 	# my ($trainingset, $testset) = getTrainTestCourseSetsCV($i, $part_size, keys %data_to_shuffle_mapping);
@@ -379,6 +379,7 @@ foreach my $i (0..($num_folds-1)){
 	print $result_file "\n at_100 \t \t $p_at_100r \t 100 \t $f1_at_100r\t \n";
 
 	print "\n";
+	close $output_fold_fh;
 }
 
 ## Cross validation loop ends

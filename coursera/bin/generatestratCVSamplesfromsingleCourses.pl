@@ -44,7 +44,7 @@ sub Help{
   	print STDERR "       $progname -n -dbname -course [-allf -uni -cutoff -stem
 										-tftype	-tprop -forumtype		
 										-courseref	-affir		
-										-nums -pdtb -agree  -q	]\n";
+										-nums -pdtb -pdtbexp -pdtbimp -agree  -q	]\n";
 	print STDERR "Options:\n";
 	print STDERR "\t-folds number of cross-validation folds \n";
 	print STDERR "\t-dbname database name \n";
@@ -77,7 +77,11 @@ my $agree				= 0;
 my $courseref			= 0;
 my $nonterm_courseref 	= 0;
 my $affirmations 		= 0;
+
 my $pdtb				= 0;
+my $pdtb_imp			= 0;
+my $pdtb_exp			= 0;
+
 my $unigrams			= 0;
 
 my $oversample			= 0;
@@ -111,6 +115,8 @@ $help = 1 unless GetOptions(
 				'tprop'			=>	\$tprop,
 				'nums'			=>	\$numsentences,
 				'pdtb'			=>	\$pdtb,
+				'pdtbexp'		=>	\$pdtb_imp,
+				'pdtbimp'		=>	\$pdtb_exp,
 				'agree'			=>	\$agree,
 				'stem'			=>	\$stem,
 				#features end here
@@ -125,7 +131,7 @@ if ( $help ){
 }
 
 if ( !defined $num_folds){
-	print "\n number of foldes is undefined";
+	print "\n number of folds is undefined";
 	Help();	
 	exit(0);
 }
@@ -181,9 +187,11 @@ my @unigrams_plus		= (63);
 my @the_rest			= (3,7,15,31);
 
 my @edm 				= (31);
-my @proposed			= (32, 64, 63, 95, 127);
-my @pdtb_feature		= (64);
-my @iterations			= (0,95);
+my @proposed			= (32, 64, 63, 127, 95);
+my @edm_plus_pdtb_imp_exp	= (223);
+my @edm_plus_pdtb_exp	= (95);
+#my @iterations			= (0, 31, 32, 63, 64, 95, 127);
+my @iterations			= (95);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -210,7 +218,7 @@ my $threadsquery = 	"select docid, courseid, id,
 						where courseid = ? 
 							and forumid = ?";
 
-my $threadssth = $dbh->prepare($threadsquery) or die "prepare failed \n $!\n";
+my $threadssth = $dbh->prepare($threadsquery) or die "prepare $threadsquery failed \n $DBI::errstr!\n";
 
 
 if(!defined $end_index){
@@ -393,11 +401,13 @@ foreach my $type ("test","training"){
 				$numsentences 		= $d3;
 				$nonterm_courseref	= $d4;
 				$agree				= $d5;
-				$pdtb 				= $d6;
-				$courseref			= $d7;
+				#$pdtb 				= $d6;
+				$pdtb_exp			= $d6;
+				$pdtb_imp			= $d7;
+				$courseref			= $d8;
 			}
 
-			if($pdtb){
+			if($pdtb_exp || $pdtb_imp){
 				#hashmap of removed file
 				# $removed_files = readRemovedFiles();
 				# if(keys %{$removed_files} eq 0){
@@ -423,8 +433,9 @@ foreach my $type ("test","training"){
 			$outfile  .=  $d3 	? "nums+"			: "";
 			$outfile  .=  $d4 	? "nont_course+"  	: "";
 			$outfile  .=  $d5	? "agree+"			: "";
-			$outfile  .=  $d6 	? "pdtb+"	 		: "";
-			$outfile  .=  $d7	? "course+" 		: "";
+			$outfile  .=  $d6 	? "exppdtb+" 		: "";
+			$outfile  .=  $d7 	? "imppdtb+" 		: "";
+			$outfile  .=  $d8	? "course+" 		: "";
 			
 			print "\n Features switched on for this iteration $iter: $outfile";
 			print $log "\n Features switched on for this iteration $iter: $outfile";
@@ -441,8 +452,9 @@ foreach my $type ("test","training"){
 			$feature_file .= $d3 	? "+nums"  		: "";
 			$feature_file .= $d4 	? "+nont_course": "";
 			$feature_file .= $d5 	? "+agree"		: "";
-			$feature_file .= $d6 	? "+pdtb"	 	: "";
-			$feature_file .= $d7	? "+course" 	: "";
+			$feature_file .= $d6 	? "+exppdtb" 	: "";
+			$feature_file .= $d7 	? "+imppdtb" 	: "";
+			$feature_file .= $d8	? "+course" 	: "";
 						
 			$feature_file .= "_". $courses->[0] . ".txt";
 			
@@ -527,7 +539,7 @@ foreach my $type ("test","training"){
 														$numposts, $forumtype, 
 														$exp_path, $feature_file,
 														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-														$debug, $pdtb, $pdtbfilepath, $removed_files, $print_format
+														$debug, $pdtb_exp, $pdtb_imp, $pdtbfilepath, $removed_files, $print_format
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open $tmp_file file for reading \n $!";

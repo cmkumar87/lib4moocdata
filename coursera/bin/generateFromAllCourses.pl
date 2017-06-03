@@ -325,7 +325,8 @@ my @the_rest			= (3,7,15,31);
 my @edm 				= (31);
 my @proposed			= (32, 64, 63, 95, 127);
 my @pdtb_feature		= (64);
-my @iterations			= (0, 31, 32, 64, 63, 95, 127);
+#my @iterations			= (0, 31, 32, 64, 63, 95, 127);
+my @iterations			= (95);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -377,7 +378,7 @@ my $threadssth = $dbh->prepare($threadsquery)
 
 #hashmap of removed file
 my $removed_files;
-					
+
 foreach my $type ("train","test"){
 	for(my $fold = $start_index; $fold < $end_index; $fold ++){
 		my $courses = $datasets{"$type$fold"};
@@ -516,7 +517,7 @@ foreach my $type ("train","test"){
 			$outfile  .=  $d6 	? "pdtb+"	 		: "";
 			$outfile  .=  $d7	? "course+" 		: "";
 			
-			$outfile	.=  "_$type" . "_$fold .txt";
+			$outfile	.=  "_$type" . "_$fold.txt";
 			
 			#feature name file
 			my $feature_file = "features";
