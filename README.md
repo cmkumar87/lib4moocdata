@@ -2,8 +2,16 @@
 
 Library for processing MOOC data dumps.  Currently limited to Coursera data.
 
+<h3>Published Findings</h3>
+Papers published using this code on our MOOC corpus are available in this repository for download here: https://github.com/WING-NUS/lib4moocdata/tree/master/coursera/docs
+
+We request you to let us know by email or github issues forum and cite us if you use this code for your own research.
+Chandrasekaran, M. K., Kan, M.-Y., Ragupathi, K., Tan, B. C. Y. 2015. “Learning instructor intervention
+from MOOC forums”. In *Proceedings of the 8th International Conference on Educational Data
+Mining, Madrid, Spain*. pp. 218-225. International Education Data Mining Society.
+
 <h3>Coursera data export</h3>
-Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MySQL databases.
+To use this library you need to procure data dumps of MOOCs you won from Coursera. Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MySQL databases.
 A typical data export consists of the following .sql files
 <ol>
 <li> &lt;Full_Coursename&gt;(&lt;coursecode&gt;)_SQL_anonymized_forum.sql </li>
@@ -15,7 +23,10 @@ A typical data export consists of the following .sql files
 A .txt file with clickstream data is also provided. We do not process them yet in this library <br>
 5. &lt;coursecode&gt;_clickstream_export.gz
 
-For replicating our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM work</a>, it is sufficient to import files (1), (2) and (3).
+For replicating our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM 2015 paper</a>, it is sufficient to import files (1), (2) and (3).
+
+<h3>How to run this code?</h3>
+Step by step instructions on runnning experiments to replicate our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM 2015</a> and <a href="http://www.comp.nus.edu.sg/~a0092669/papers/Chandrasekaran_et_al_2017_AAAI.pdf">AAAI 2017</a> papers are <a href="https://docs.google.com/document/d/1H0M-46JLWrUiDsPrJHyt7vDSDKPXK2WwGZztevj3hgc/edit?usp=sharing" target="_new">accessible here</a>.
 
 <h3>Prerequisites</h3>
 To use the library to process and analyse your data you will first need to install the MySQL database and ingest the .sql files into the database.
