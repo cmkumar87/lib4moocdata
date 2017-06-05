@@ -77,6 +77,9 @@ my $tprop				= 0;
 my $numw				= 0;
 my $numsentences 		= 0;
 my $pdtb 				= 0;
+my $pdtb_imp			= 0;
+my $pdtb_exp			= 0;
+
 my $agree				= 0;
 
 my $courseref			= 0;
@@ -121,6 +124,8 @@ $help = 1 unless GetOptions(
 				'tprop'			=>	\$tprop,
 				'nums'			=>	\$numsentences,
 				'pdtb'			=>	\$pdtb,
+				'pdtbexp'		=>	\$pdtb_imp,
+				'pdtbimp'		=>	\$pdtb_exp,
 				'affir'			=>	\$affirmations,
 				'stem'			=>	\$stem,
 				#features end here
@@ -504,7 +509,9 @@ foreach my $type ("train","test"){
 				$numsentences 		= $d3;
 				$nonterm_courseref	= $d4;
 				$agree				= $d5;
-				$pdtb 				= $d6;
+				# $pdtb 				= $d6;
+				$pdtb_exp			= $d6;
+				$pdtb_imp			= $d7;
 			}
 			
 			# output file
@@ -514,7 +521,9 @@ foreach my $type ("train","test"){
 			$outfile  .=  $d3 	? "nums+"			: "";
 			$outfile  .=  $d4 	? "nont_course+"  	: "";
 			$outfile  .=  $d5	? "agree+"			: "";
-			$outfile  .=  $d6 	? "pdtb+"	 		: "";
+			#$outfile  .=  $d6 	? "pdtb+"	 		: "";
+			$outfile  .=  $d6 	? "exppdtb+" 		: "";
+			$outfile  .=  $d7 	? "imppdtb+" 		: "";
 			$outfile  .=  $d7	? "course+" 		: "";
 			
 			$outfile	.=  "_$type" . "_$fold.txt";
@@ -528,7 +537,9 @@ foreach my $type ("train","test"){
 			$feature_file .= $d3 	? "+nums"  		: "";
 			$feature_file .= $d4 	? "+nont_course": "";
 			$feature_file .= $d5 	? "+agree"		: "";
-			$feature_file .= $d6 	? "+pdtb"	 	: "";
+			#$feature_file .= $d6 	? "+pdtb"	 	: "";
+			$feature_file .= $d6 	? "+exppdtb" 	: "";
+			$feature_file .= $d7 	? "+imppdtb" 	: "";
 			$feature_file .= $d7	? "+course" 	: "";
 
 			$feature_file .= "_$fold.txt";
@@ -616,7 +627,7 @@ foreach my $type ("train","test"){
 														$numposts, $forumtype, 
 														$exp_path, $feature_file,
 														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-														$debug, $pdtb, $pdtbfilepath, $removed_files, $print_format
+														$debug, $pdtb_exp, $pdtb_imp, $pdtbfilepath, $removed_files, $print_format
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open features file $!";
