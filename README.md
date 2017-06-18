@@ -25,7 +25,7 @@ A typical data export consists of the following .sql files
 A .txt file with clickstream data is also provided. We do not ywt process them in this library <br>
 5. &lt;coursecode&gt;_clickstream_export.gz
 
-For replicating our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM 2015 paper</a>, it is sufficient to import files (1), (2) and (3).
+For replicating our published results (in our papers), it is sufficient to import files (1), (2) and (3).
 
 <h3>How to run this code?</h3>
 Step by step instructions on runnning experiments to replicate our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM 2015</a> and <a href="http://www.comp.nus.edu.sg/~a0092669/papers/Chandrasekaran_et_al_2017_AAAI.pdf">AAAI 2017</a> papers are <a href="https://docs.google.com/document/d/1H0M-46JLWrUiDsPrJHyt7vDSDKPXK2WwGZztevj3hgc/edit?usp=sharing" target="_new">accessible here</a>.
