@@ -5,10 +5,12 @@ Library for processing MOOC data dumps.  Currently limited to Coursera data.
 <h3>Published Findings</h3>
 Papers published using this code on our MOOC corpus are available in this repository for download here: https://github.com/WING-NUS/lib4moocdata/tree/master/coursera/docs
 
-We request you to let us know by email or github issues forum and cite us if you use this code for your own research.
-Chandrasekaran, M. K., Kan, M.-Y., Ragupathi, K., Tan, B. C. Y. 2015. “Learning instructor intervention
+If you use this code for your own research, we request you to let us know by email or github issues and cite us.
+
+- Chandrasekaran, M. K., Kan, M.-Y., Ragupathi, K., Tan, B. C. Y. 2015. “Learning instructor intervention
 from MOOC forums”. In *Proceedings of the 8th International Conference on Educational Data
 Mining, Madrid, Spain*. pp. 218-225. International Education Data Mining Society.
+- Chandrasekaran, Epp, C.D., M. K., Kan, M.-Y., Litman, D., 2017. “Using Discourse Signals for Robust Instructor Intervention Prediction”. In *Proceedings of the Thirty-First AAAI conference on Artificial Intelligence (AAAI-17), San Francisco, USA*. pp. 3415-3421. AAAI.
 
 <h3>Coursera data export</h3>
 To use this library you need to procure data dumps of MOOCs you won from Coursera. Coursera exports data from its MOOCs after compeltion for use by the university that is hosting it on its platform. These data dumps are .sql exports from MySQL databases.
