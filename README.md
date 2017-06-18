@@ -22,7 +22,7 @@ A typical data export consists of the following .sql files
 <li> &lt;Full_Coursename&gt;(&lt;coursecode&gt;)_SQL_unanonymizable.sql </li>
 </ol>
 
-A .txt file with clickstream data is also provided. We do not process them yet in this library <br>
+A .txt file with clickstream data is also provided. We do not ywt process them in this library <br>
 5. &lt;coursecode&gt;_clickstream_export.gz
 
 For replicating our <a href="http://wing.comp.nus.edu.sg/~cmkumar/edm2015.pdf">EDM 2015 paper</a>, it is sufficient to import files (1), (2) and (3).
@@ -45,8 +45,8 @@ The scripts require you to have installed Perl 5 and some dependant perl package
 <b>For Windows users </b> <br>
 Install Strawberyy Perl from here http://strawberryperl.com/lib4moocdata or Active Perl from here http://www.activestate.com/activeperl
 
-<b> For Linux, Mac usesrs </b> <br>
-Linux and Mac users should have perl already installed as part of your OS. You can check with by typing perl -v in your terminal.
+<b> For Linux, Mac users </b> <br>
+Linux and Mac users should have perl already installed as part of your OS. You can check this with the command `perl -v` in your terminal.
 
 <h4>Dependant Perl Modules (Packages) to install</h4>
 CPAN has tools to easy install perl modules. Please see this step-by-step tutorial http://www.cpan.org/modules/INSTALL.html <br>
