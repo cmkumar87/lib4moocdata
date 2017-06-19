@@ -344,7 +344,8 @@ sub generateTrainingFile{
 			
 			# log thread id and skip this thread/document
 			if ( $thread_length{$docid} == 0 ){ 
-				print LOG "Empty thread: $docid $courseid $threadid \n"; next;
+				print LOG "Empty thread: $docid $courseid $threadid \n"; 
+				next;
 			}
 		
 			if($pdtb_exp){
