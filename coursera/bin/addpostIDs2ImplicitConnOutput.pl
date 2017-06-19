@@ -74,6 +74,9 @@ system("mkdir logs");
 open( my $log, ">$path/../logs/$progname.log") 
 		or die "\n Cannot open $path/../logs/$progname.log";
 
+open( my $skipfilelog, ">$path/../logs/skipped.implicit.err.log") 
+		or die "\n Cannot open $path/../logs/skipped.implicit.err.log";
+		
 if(!defined $dbh){
 	print $log "Exception. Db handle is undefined";
 	print "Exception. Db handle is undefined"; exit(0);
@@ -122,7 +125,7 @@ foreach my $forum_id ( sort @$forums){
 	# we are only interested in threads from lecture, exam, errata 
 	# and homework (aka. assignment) threads
 	## to do need to make a forum.ignorelist file and delete the foll line of code
-	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001 || $forum_id == 4) {	next;	}
+	if( $forum_id == 0 || $forum_id == -2 || $forum_id == 10001 || $forum_id == 4 ) {	next;	}
 	
 	my $threads		= $dbh->selectall_hashref("select * from forum_threads where forum_id = $forum_id", 'id');
 	# my $threads	= $dbh->selectall_hashref("select * from thread where forumid = $forum_id and courseid = \'$courseid\'", 'id');
@@ -130,7 +133,7 @@ foreach my $forum_id ( sort @$forums){
 	print $log "\n Processing $path/../$courseid"."_pdtbinput/$forum_id";
 	
 	if (keys %$threads < 1){
-		print "\n Skipping $path/../$courseid"."_pdtbinput/$forum_id since no threads were found";
+		print "\n Skipping $path/../$courseid"."_pdtbinput/$forum_id since no threads were found.";
 		print $log "\n Skipping $path/../$courseid"."_pdtbinput/$forum_id since no threads were found";
 		next;
 	}
@@ -152,6 +155,18 @@ foreach my $forum_id ( sort @$forums){
 		#if( -e "$out_file_path/$thread_id.txt.exp2.out" ){ next; }
 		print $log "\n Doing $thread_id in $forum_id";
 		
+		#fails and skips if file does not exit
+		unless( -e "$out_file_path/$thread_id.txt.nonexp.out" ){
+			print $skipfilelog "$forum_id/$thread_id \t File not found! Skipping thread.\n";
+			next;
+		}
+		
+		#logs if file is empty
+		if( -z "$out_file_path/$thread_id.txt.nonexp.out" ){
+			print $skipfilelog "$forum_id/$thread_id \t Empty file found! A corresponding 0kb file will be output.\n";
+			#next;
+		}
+		
 		open (my $SENSEFILE, "<$out_file_path/$thread_id.txt.nonexp.out") 
 					or die "\n Cannot read file $out_file_path/$thread_id \n $!";
 		my $sense_counter  = 0;
@@ -170,7 +185,7 @@ foreach my $forum_id ( sort @$forums){
 			$post_counter ++;
 			
 			my $cmnts =  $dbh->selectall_hashref("select * from forum_comments where thread_id = $thread_id and post_id = $post_id order by id", 'id');
-			#my $cmnts =  $dbh->selectall_hashref("select * from comment where thread_id = $thread_id and post_id = $post_id and courseid = \'$courseid\' order by id", 'id');
+			# my $cmnts =  $dbh->selectall_hashref("select * from comment where thread_id = $thread_id and post_id = $post_id and courseid = \'$courseid\' order by id", 'id');
 			foreach my $id (sort {$a<=>$b} keys %$cmnts){
 				$post_ids{$post_counter} = $id;
 				$post_counter ++;
@@ -216,7 +231,7 @@ foreach my $forum_id ( sort @$forums){
 			foreach my $post_counter (sort {$a <=> $b} keys %$post_spans){
 				my $bol = $post_spans->{$post_counter}{'bol'};
 				my $eol = $post_spans->{$post_counter}{'eol'};
-				if(!defined $spans[0]){	print $log "#BLANK \t $senses{$sense_counter}"; last;}
+				if(!defined $spans[0]){	print $log "\n #BLANK \t $senses{$sense_counter}"; last;}
 				if ($spans[0] >= $bol && $spans[1] <= $eol){
 					print $FHOUT "$post_ids{$post_counter} \t $senses{$sense_counter}";
 					$search_flag = 1;
@@ -224,7 +239,7 @@ foreach my $forum_id ( sort @$forums){
 				}
 			}
 			if( $search_flag eq 0 && defined $spans[0]){
-				print $log  "NOTFOUND \t $senses{$sense_counter}";
+				print $log  "\n NOTFOUND \t $senses{$sense_counter}";
 			}
 			
 			$sense_counter++;
@@ -236,6 +251,7 @@ foreach my $forum_id ( sort @$forums){
 	chdir("..");
 }
 
+print $log "\n ##Done##";
 close $log;
 
 print "\n ##Done##";
