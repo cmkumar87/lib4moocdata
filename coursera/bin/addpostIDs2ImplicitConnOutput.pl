@@ -155,9 +155,13 @@ foreach my $forum_id ( sort @$forums){
 		#if( -e "$out_file_path/$thread_id.txt.exp2.out" ){ next; }
 		print $log "\n Doing $thread_id in $forum_id";
 		
+		open (my $FHOUT, ">$out_file_path/$thread_id.txt.nonexp2.out") 
+								or die "\n Cannot open write file pdtbinput at $out_file_path \n $!";	
+		
 		#fails and skips if file does not exit
 		unless( -e "$out_file_path/$thread_id.txt.nonexp.out" ){
 			print $skipfilelog "$forum_id/$thread_id \t File not found! Skipping thread.\n";
+			close $FHOUT;
 			next;
 		}
 		
@@ -215,9 +219,6 @@ foreach my $forum_id ( sort @$forums){
 		$sense_counter = 0;
 		open (my $SPANFILE2, "<$out_file_path/$thread_id.txt.nonexp.res") 
 								or die "\n Cannot open read file pdtbinput at $out_file_path \n $!";
-		
-		open (my $FHOUT, ">$out_file_path/$thread_id.txt.nonexp2.out") 
-								or die "\n Cannot open write file pdtbinput at $out_file_path \n $!";	
 				
 		while (my $line = <$SPANFILE2>){
 			# if($connective_label{$conn_counter} eq 0){ $conn_counter ++; next; }
