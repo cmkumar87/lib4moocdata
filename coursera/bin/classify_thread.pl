@@ -66,8 +66,8 @@ $help = 1 unless GetOptions(
 				'folds=i'	=>	\$num_folds,
 				'in1=s'		=>	\$in1,
 				'in2=s'		=>	\$in2,
-				'indir=s'	=>	\$indir,
-				'stem'		=>	\$stem,
+				'indir=s'	=>	\$indir,   #redundant if  -course specified
+				'stem'		=>	\$stem,    
 				'i'			=>	\$interactive,
 				'w=s'		=>	\$weighing,
 				'debug'		=>	\$debug,
@@ -87,13 +87,15 @@ my $dbh		= undef;
 open (my $log, ">$path/../logs/$progname.log")
 	or die "cannot open $path/../logs/$progname.log for writing";
 
-my $experiments_path;
+my $experiments_path	 = "$path/../experiments";
+# my $experiments_path	 = "$path/../experiments/Pitt_experiments_implicit";
+
 
 if(defined $indir){
-	$experiments_path	.= "$path/../experiments/$indir";
+	$experiments_path	.= "/$indir";
 }
 else{
-	$experiments_path	.= "$path/../experiments/$incourse";
+	$experiments_path	.= "/$incourse";
 }
 my $results_path		 = "$experiments_path/results";
 
