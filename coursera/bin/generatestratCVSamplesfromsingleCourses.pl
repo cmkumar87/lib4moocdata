@@ -4,7 +4,7 @@ require 5.0;
 
 ##
 #
-# Author : Muthu Kumar C
+# Author : Muthu Kumar Chandrasekaran
 # Recreate thread from database
 # Created in Mar, 2014
 #
