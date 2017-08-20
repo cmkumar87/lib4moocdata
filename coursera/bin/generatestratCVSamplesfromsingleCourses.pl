@@ -5,7 +5,7 @@ require 5.0;
 ##
 #
 # Author : Muthu Kumar Chandrasekaran
-# Recreate thread from database
+# Generate Feature Files with Stratified folds for cross-validation
 # Created in Mar, 2014
 #
 ##
