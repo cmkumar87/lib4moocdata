@@ -4,8 +4,8 @@ require 5.0;
 
 ##
 #
-# Author : Muthu Kumar C
-# Recreate thread from database
+# Author : Muthu Kumar Chandrasekaran
+# Generate Feature Files with Stratified folds for cross-validation
 # Created in Mar, 2014
 #
 ##
@@ -346,10 +346,6 @@ foreach my $courseid (@$courses){
 	}
 }
 
-##DEBUG
-# print "--- ", scalar(keys %docid_to_serialid);
-# print "--- ", scalar(keys %serialid_to_docid);
-
 if (keys %posthreads == 0 ){
 	print "\nException: No + ve threads found!";
 	exit(0);
@@ -369,7 +365,7 @@ if ($num_folds > $thread_totals ){
 }
 
 my %docids_perfold = ();
-my $experimentpath = "$path/../experiments/AAAI_17_replication_feature_gen";
+my $experimentpath = "$path/../experiments/AAAI_17_replication";
 
 if(defined $cvfoldfile){
 	open (FOLDFILE, "<$experimentpath/$courseid/$cvfoldfile")
@@ -380,16 +376,8 @@ if(defined $cvfoldfile){
 		my @serialids;
 		foreach my $id (@docids){
 			push (@serialids, $serialid_to_docid{$id});
-		}
-		# print "\n length of array ", scalar(@docids); 
-		# print "\n length of array ", scalar(@serialids); 
-		# print "\n $docids[0] \t $docids[123] \t $docids[124] \t ", length(trim($docids[124]));
-		# print "\n $serialids[0] \t $serialids[123] \t $serialids[124]";
-		# print "\n $serialid_to_docid{$docids[0]} \t $serialid_to_docid{$docids[123]} \t $serialid_to_docid{$docids[124]}";
-		# print "\n $serialid_to_docid{$docids[0]} \t $serialid_to_docid{$docids[123]} \t $serialid_to_docid{990}";
-		# exit(0);		
+		}	
 		$docids_perfold{trim($fields[0])}{$fields[1]} = \@serialids;
-		# print "$docids_perfold{$fields[0]}";
 	}
 }
 
@@ -409,7 +397,6 @@ for(my $index = $start_index; $index < $end_index; $index ++){
 	if(defined $cvfoldfile){
 		$training_set	= $docids_perfold{'training'}{$index};
 		$test_set		= $docids_perfold{'test'}{$index};
-		# print join(" ",@$test_set); exit(0);
 	}
 	else{
 		my $postraining_set;
