@@ -35,14 +35,15 @@ use Preprocess;
 use Model;
 
 sub generateTrainingFile{
-	my (	$FH, $dbh, $threadcats,
+	my (	$FH, $dbh, $mysqldbname, $threadcats,
 			$unigrams, $freqcutoff, $stem, $term_length, $tftype, $idftype,
 			$tprop, $numw, $numsentences,
 			$courseref, $nonterm_courseref, $affir, $agree,
 			$tlength, $forumtype,
 			$path, $feature_file,
 			$course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-			$debug, $pdtb_exp, $pdtb_imp, $pdtbfilepath, $removed_files, $print_format
+			$debug, $pdtb_exp, $pdtb_imp, $viewed, 
+			$pdtbfilepath, $removed_files, $print_format
 		) = @_;
 
 	my @courses = keys %{$course_samples};
@@ -76,7 +77,7 @@ sub generateTrainingFile{
 	my $lengthf = 0;
 	my $time	= 0;
 	
-	if ( $courseref || $nonterm_courseref || $agree || $affir || $pdtb_exp || $pdtb_imp){
+	if ( $courseref || $nonterm_courseref || $agree || $affir || $pdtb_exp || $pdtb_imp ){
 		 $lexical = 1;
 	}
 	
@@ -202,7 +203,7 @@ sub generateTrainingFile{
 	my $termsstem;
 
 	if($unigrams){
-		$terms		 = Model::getalltermIDF($dbh,$freqcutoff,0,$corpus);
+		$terms	=	Model::getalltermIDF($dbh,$freqcutoff,0,$corpus);
 		#sanity check
 		if (keys %{$terms} == 0 ){
 			print "Exception: termIDFs are empty for $corpus_type. Check the tables and the query!\n @$corpus";
@@ -255,8 +256,23 @@ sub generateTrainingFile{
 		}
 	}
 	
+	my %inst_viewed_threads;
+	if($viewed){
+		#my $access_group_id_query 	= "select id from access_groups 
+		#									where name in ('Instructor', 'Teaching Staff', 'Staff', 'Community TA')";
+		#my $accessids_ref			= $dbh->selectall_arrayref($access_group_id_query,'user_id')
+		#									or die "query failed: $access_group_id_query \n $DBI::errstr";
+		#my $accessids				= @$accessids_ref;
+		my $dbhmysql		 			= Model::getDBHandle(undef,1,'mysql',$mysqldbname);
+		my $inst_viewed_threads_local 	= getInstViewedThreads($dbhmysql);
+		
+		foreach my $id (keys %$inst_viewed_threads_local){         #item_id, user_id, timestamp
+			$inst_viewed_threads{ $inst_viewed_threads_local->{$id}{'item_id'} } =  $inst_viewed_threads_local->{$id}{'timestamp'};
+			#print "\n $id \t $inst_viewed_threads->{$id}{'item_id'} \t $inst_viewed_threads->{$id}{'user_id'}\t $inst_viewed_threads->{$id}{'timestamp'}";
+		}
+	}
 	
-	# First pass
+	# First pass (applicable for features that require normalisation)
 	foreach my $category_id (keys %$threadcats){
 		
 		my $pdtbout = undef;
@@ -1076,6 +1092,10 @@ sub generateTrainingFile{
 				}
 			}
 
+			if($viewed){
+			
+			}
+			
 		    if($pdtb_exp){
 				print $log "adding pdtb relation feature..\n";
 				##afterAAAI changes begin
@@ -1084,8 +1104,7 @@ sub generateTrainingFile{
 				#}
 				#elsif(keys %{$pdtbrelation{$docid}} < 25){
 				#	die "\n Exeption: pdtb feature vector is partially empty";
-				#}
-				##afterAAAI changes end
+				#}afterAAAI changes end
 				
 				foreach my $relation ( sort keys %{$pdtbrelation{$docid}} ){
 					$nontermfeaturecount++;
@@ -1146,7 +1165,17 @@ sub generateTrainingFile{
 				}
 			}
 	
-		    if($pdtb_imp){
+		    if($viewed){
+				$nontermfeaturecount++;
+				if ( !exists $inst_viewed_threads{$threadid} ){
+					$term_vector->{$nontermfeaturecount} = 0;
+				}
+				else{
+					$term_vector->{$nontermfeaturecount} = 1;
+				}
+			}
+			
+			if($pdtb_imp){
 				print $log "adding pdtb relation feature..\n";
 				
 				foreach my $relation ( sort keys %{$pdtbrelation_imp{$docid}} ){
@@ -1481,6 +1510,27 @@ sub generateTrainingFile{
 	close $feature_list;
 	
 	close LOG;
+}
+
+sub getInstViewedThreads{
+	my ($dbh) = @_;
+	# my $instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7,10) and u.session_user_id = h.session_user_id";
+	# 4,5,6,9 - students
+	my $instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7) and u.session_user_id = h.session_user_id";
+	my $instructors_ref			= $dbh->selectall_hashref($instructors_query,'user_id')
+										or die "query failed: $instructors_query \n $DBI::errstr";
+	my @instructors				= keys %{$instructors_ref};
+	
+	my $threads_viewed_query	= "select id, item_id, user_id, timestamp from activity_log where action = 'view.thread' and user_id in (";
+
+	my $userstring 				= join(",",@instructors);
+	$threads_viewed_query		.= "$userstring);";
+		
+	print "\n Executing... $threads_viewed_query \n ";
+		
+	my $threads_viewed			= $dbh->selectall_hashref($threads_viewed_query,'id')
+										or die "query failed: $threads_viewed_query \n $DBI::errstr";
+	return $threads_viewed;
 }
 
 sub isThreadApproved{
