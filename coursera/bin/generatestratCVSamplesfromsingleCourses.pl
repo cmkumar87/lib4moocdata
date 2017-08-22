@@ -201,7 +201,7 @@ my @edm_plus_pdtb_exp		= (95);
 # my @iterations			= (0, 31, 32, 63, 64, 95, 127);
 #my @iterations				= (223, 159, 95, 31, 64);
 # my @iterations			= (256, 479);
-my @iterations				= (223, 159);
+my @iterations				= (95, 223, 159);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
