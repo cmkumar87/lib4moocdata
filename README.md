@@ -57,15 +57,15 @@ The packages to install are:
 <li>Getopt::Long</li>
 <li>Encode</li>
 <li>HTML::Entities</li>
-<li>Lingua::EN::Sentence qw( get_sentences add_acronyms)</li>
-<li>Lingua::EN::Tokenizer::Offsets qw(token_offsets get_tokens)</li>
-<li>Lingua::StopWords  qw( getStopWords )</li>
+<li>Lingua::EN::Sentence</li>
+<li>Lingua::EN::Tokenizer::Offsets</li>
+<li>Lingua::StopWords</li>
 <li>Lingua::EN::StopWordList</li>
 <li>Lingua::Stem::Snowball</li>
 <li>Lingua::EN::Ngram</li>
 <li>Lingua::EN::Bigram ## Fails on linux centos 6 </li>
 <li>Lingua::EN::Tagger</li>
-<li>Lingua::EN::PluralToSingular 'to_singular'</li>
+<li>Lingua::EN::PluralToSingular</li>
 <li>Config::Simple</li>
 <li>File::Remove</li>
 </ul>
