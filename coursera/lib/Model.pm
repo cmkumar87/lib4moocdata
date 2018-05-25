@@ -23,15 +23,17 @@ sub getDBHandle{
 	my $dsn;
 	
 	if(!defined $dbtype){
+		print "\n making non-mysql $dbtype db handle";
 		#sqlite
 		$uname  = 'foo';
 		$pswd   = '';
 		$dsn	= "dbi:SQLite:dbname=$path/$dbname.db";
 	}
 	elsif($dbtype eq 'mysql'){
+		print "\n making mysql $dbtype db handle";
 		#mysql
 		$uname  = 'root';
-		$pswd   = '';
+		$pswd   = 'root';
 		if(!defined $dbname){
 			$dbname = 'coursera_dump';
 		}
