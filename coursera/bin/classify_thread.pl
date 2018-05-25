@@ -87,9 +87,14 @@ my $dbh		= undef;
 open (my $log, ">$path/../logs/$progname.log")
 	or die "cannot open $path/../logs/$progname.log for writing";
 
-my $experiments_path	 = "$path/../experiments";
-# my $experiments_path	 = "$path/../experiments/Pitt_experiments_implicit";
-
+# my $experiments_path	 = "$path/../experiments/AAAI_17_replication_Pitt";
+#my $experiments_path	 = "$path/../experiments/Pitt_experiments_implicit";
+#my $experiments_path	 = "$path/../experiments/AAAI_17_replication_feature_gen";
+#my $experiments_path	 = "$path/../experiments/AAAI_17";
+#my $experiments_path	 = "$path/../experiments/Fixed_instances_AAA_17_replication";
+#my $experiments_path	 = "$path/../experiments/AAAI_17/EXTRA_RUNS";
+#my $experiments_path	 = "$path/../experiments/AAAI_17_replication";
+my $experiments_path	 = "$path/../experiments/AAA_17_replication_NUS";
 
 if(defined $indir){
 	$experiments_path	.= "/$indir";
@@ -136,8 +141,8 @@ if(defined $incourse){
 
 my $num_courses = scalar @courses;
 if($num_courses == 0){
-	print "Exception: zero courses found! Check data file.\n"; exit(0);
-	
+	print "Exception: zero courses found! Check data file.\n"; 
+	exit(0);
 }
 
 print "\n Number of courses idendified in this dataset: $num_courses \n";

@@ -51,13 +51,16 @@ if ( $help ){
 	exit(0);
 }
 
-my $experimentpath = "$path/../experiments/AAAI_17_replication";
+my $experimentpath = "$path/../experiments/AAAI_17";
 
 my $train_basename	= (split(/_training_/,$in1))[0];
 my $test_basename	= (split(/_test_/,$in2))[0];
 
+#print "$train_basename \t $test_basename";
+#exit(0);
+
 open (my $out, ">$experimentpath/$coursecode/$test_basename"."_$coursecode"."_folds.txt") 
-		or die "cannot open $experimentpath/$coursecode"."_folds.txt";
+		or die "cannot open $experimentpath/$coursecode/$test_basename"."_$coursecode"."_folds.txt";
 
 ## testing folds
 foreach my $fold (0..4){

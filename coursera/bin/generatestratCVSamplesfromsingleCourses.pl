@@ -201,7 +201,7 @@ my @edm_plus_pdtb_exp		= (95);
 # my @iterations			= (0, 31, 32, 63, 64, 95, 127);
 #my @iterations				= (223, 159, 95, 31, 64);
 # my @iterations			= (256, 479);
-my @iterations				= (95);
+my @iterations				= (223, 287);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -212,7 +212,8 @@ if(!$allfeatures && scalar @iterations > 1){
 }
 
 mkdir("$path/../experiments");
-my $exp_path 		= "$path/../experiments";
+#my $exp_path 		= "$path/../experiments";
+my $exp_path 		= "$path/../experiments/AAA_17_replication_NUS";
 $outfile 			= "../experiments/";
 
 mkdir("$path/../tmp_file");
@@ -221,7 +222,7 @@ my $tmp_file 		= "$path/../tmp_file/tmp_samples_$courseid";
 # CREATE MULTIPLE TEST AND TRAINING DATASETS FROM THE OVERALL
 # LIST OF ALL COURSES
 
-my $num_courses 			= 1;
+my $num_courses = 1;
 
 my $threadsquery = 	"select docid, courseid, id, 
 						inst_replied from thread 
@@ -365,7 +366,7 @@ if ($num_folds > $thread_totals ){
 }
 
 my %docids_perfold = ();
-my $experimentpath = "$path/../experiments/AAAI_17_replication";
+my $experimentpath = "$path/../experiments/AAA_17_replication_NUS";
 
 if(defined $cvfoldfile){
 	open (FOLDFILE, "<$experimentpath/$courseid/$cvfoldfile")
@@ -378,7 +379,7 @@ if(defined $cvfoldfile){
 			push (@serialids, $serialid_to_docid{$id});
 		}	
 		$docids_perfold{trim($fields[0])}{$fields[1]} = \@serialids;
-	}
+	}	
 }
 
 ####################*******************#######################

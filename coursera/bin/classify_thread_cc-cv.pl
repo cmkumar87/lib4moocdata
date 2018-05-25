@@ -7,7 +7,7 @@ use POSIX;
 
 ##
 #
-# Author : Muthu Kumar C
+# Author : Muthu Kumar Chandrasekaran
 # Created in Spring, 2014
 # Modified in Fall, 2015
 #
@@ -185,10 +185,10 @@ elsif ($corpus_name eq 'd14'){
 }
 elsif($corpus_name eq 'nus'){
 		@courses = (  'classicalcomp-001'
-								 ,'classicalcomp-002'
-								 ,'reasonandpersuasion-001'
-								 ,'reasonandpersuasion-002'
-								)
+					 ,'classicalcomp-002'
+					 ,'reasonandpersuasion-001'
+					 ,'reasonandpersuasion-002'
+				   )
 }
 elsif($corpus_name eq 'pitt'){
 		@courses = ( 'accountabletalk-001',
