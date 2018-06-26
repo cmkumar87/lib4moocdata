@@ -62,26 +62,26 @@ my $mysqldbname			= undef;
 my $courseid			= undef;
 
 my $freqcutoff 			= undef;
-my $stem				= 0;
-my $tftype				= 'none';
-my $term_length_cutoff	= 2;
-my $idftype				= 'none';
+my $stem			= 0;
+my $tftype			= 'none';
+my $term_length_cutoff		= 2;
+my $idftype			= 'none';
 
 my $allfeatures 		= 0;
 my $numposts			= 0;
-my $tprop				= 0;
-my $numw				= 0;
+my $tprop			= 0;
+my $numw			= 0;
 my $numsentences 		= 0;
 
 my $forumtype			= 0;
-my $agree				= 0;
+my $agree			= 0;
 
 my $courseref			= 0;
-my $nonterm_courseref 	= 0;
+my $nonterm_courseref 		= 0;
 my $affirmations 		= 0;
-my $viewed				= 0;
+my $viewed			= 0;
 
-my $pdtb				= 0;
+my $pdtb			= 0;
 my $pdtb_imp			= 0;
 my $pdtb_exp			= 0;
 
@@ -201,8 +201,9 @@ my @edm_plus_pdtb_exp		= (95);
 # my @iterations			= (0, 31, 32, 63, 64, 95, 127);
 #my @iterations				= (223, 159, 95, 31, 64);
 # my @iterations			= (256, 479);
-my @iterations				= (479, 287);
-
+#Viewed Feature Set
+#my @iterations				= (479, 287);
+my @iterations = (95)
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
 	print "\n\n Did you forget to switch 'allf' on?";
