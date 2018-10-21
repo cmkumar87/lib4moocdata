@@ -65,35 +65,35 @@ my $freqcutoff 			= undef;
 my $stem			= 0;
 my $tftype			= 'none';
 my $term_length_cutoff		= 2;
-my $idftype			= 'none';
+my $idftype	= 'none';
 
-my $allfeatures 		= 0;
-my $numposts			= 0;
-my $tprop			= 0;
-my $numw			= 0;
-my $numsentences 		= 0;
+my $allfeatures	= 0;
+my $numposts = 0;
+my $tprop = 0;
+my $numw = 0;
+my $numsentences = 0;
 
-my $forumtype			= 0;
-my $agree			= 0;
+my $forumtype = 0;
+my $agree = 0;
 
 my $courseref			= 0;
 my $nonterm_courseref 		= 0;
 my $affirmations 		= 0;
 my $viewed			= 0;
 
-my $pdtb			= 0;
-my $pdtb_imp			= 0;
-my $pdtb_exp			= 0;
+my $pdtb = 0;
+my $pdtb_imp = 0;
+my $pdtb_exp = 0;
 
-my $unigrams			= 0;
+my $unigrams = 0;
 
-my $oversample			= 0;
-my $num_folds			= undef;
-my $print_format		= 'none';
-my $start_index			= 0;
-my $end_index			= undef; # takes the value of #folds if left undefined
+my $oversample = 0;
+my $num_folds = undef;
+my $print_format = 'none';
+my $start_index = 0;
+my $end_index = undef; # takes the value of #folds if left undefined
 
-my $cvfoldfile 			= undef;
+my $cvfoldfile = undef;
 my $outfile;
 my $tftab;
 
@@ -175,35 +175,34 @@ if(!defined $dbname){
 	print "\n Exception: dbname not defined"; exit(0);
 }
 
-my $db_path		= "$path/../data";
-my $dbh 		= Model::getDBHandle($db_path,undef,undef,$dbname);
+my $db_path	= "$path/../data";
+my $dbh = Model::getDBHandle($db_path,undef,undef,$dbname);
 
 # Next sample from threads of those n courses
-my %docid_to_serialid		= ();
-my %serialid_to_docid		= ();
-my %instreplied				= ();
-my $serial_id				= 0;
-my $corpus_type				= undef;
+my %docid_to_serialid = ();
+my %serialid_to_docid = ();
+my %instreplied = ();
+my $serial_id = 0;
+my $corpus_type = undef;
 		
-my @additive_sequence		= (0,1,3,7,15,31,63,127);
-my @ablation_sequence		= (-31,47,55,59,61);
-my @individual_features 	= (2,4,8,16,32);
-my @combined				= (0,1,3,7,15,31,63,-31,47,55,59,61,2,4,8,16,32,64);
-my @unigrams_only			= (0);
-my @uni_plus_forumtype		= (0,1);
-my @unigrams_plus			= (63);
-my @the_rest				= (3,7,15,31);
+my @additive_sequence = (0,1,3,7,15,31,63,127);
+my @ablation_sequence = (-31,47,55,59,61);
+my @individual_features	= (2,4,8,16,32);
+my @combined = (0,1,3,7,15,31,63,-31,47,55,59,61,2,4,8,16,32,64);
+my @unigrams_only = (0);
+my @uni_plus_forumtype = (0,1);
+my @unigrams_plus = (63);
+my @the_rest = (3,7,15,31);
 
-my @edm 					= (31);
-my @proposed				= (32, 64, 63, 127, 95);
-my @edm_plus_pdtb_imp_exp	= (223, 159, 256);
-my @edm_plus_pdtb_exp		= (95);
+my @edm = (31);
+my @proposed = (32, 64, 63, 127, 95);
+my @edm_plus_pdtb_imp_exp = (223, 159, 256);
+my @edm_plus_pdtb_exp = (95);
 # my @iterations			= (0, 31, 32, 63, 64, 95, 127);
 #my @iterations				= (223, 159, 95, 31, 64);
 # my @iterations			= (256, 479);
 #Viewed Feature Set
-#my @iterations				= (479, 287);
-my @iterations = (95);
+my @iterations				= (415, 287, 479, 287);
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
 	print "\n\n Did you forget to switch 'allf' on?";
@@ -213,8 +212,8 @@ if(!$allfeatures && scalar @iterations > 1){
 }
 
 mkdir("$path/../experiments");
-#my $exp_path 		= "$path/../experiments";
-my $exp_path 		= "$path/../experiments/AAA_17_replication_NUS";
+my $exp_path 		= "$path/../experiments";
+#my $exp_path 		= "$path/../experiments/AAA_17_replication_NUS_2018July29";
 $outfile 			= "../experiments/";
 
 mkdir("$path/../tmp_file");
@@ -230,7 +229,8 @@ my $threadsquery = 	"select docid, courseid, id,
 						where courseid = ? 
 							and forumid = ?";
 
-my $threadssth = $dbh->prepare($threadsquery) or die "prepare $threadsquery failed \n $DBI::errstr!\n";
+my $threadssth = $dbh->prepare($threadsquery) 
+			or die "prepare $threadsquery failed \n $DBI::errstr!\n";
 
 
 if(!defined $end_index){
