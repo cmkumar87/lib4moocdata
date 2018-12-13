@@ -76,17 +76,16 @@ my $numsentences = 0;
 my $forumtype = 0;
 my $agree = 0;
 
-my $courseref			= 0;
-my $nonterm_courseref 		= 0;
-my $affirmations 		= 0;
-my $viewed			= 0;
+my $courseref = 0;
+my $nonterm_courseref = 0;
+my $affirmations = 0;
+my $viewed = 0;
 
 my $pdtb = 0;
 my $pdtb_imp = 0;
 my $pdtb_exp = 0;
 
 my $unigrams = 0;
-
 my $oversample = 0;
 my $num_folds = undef;
 my $print_format = 'none';
@@ -96,12 +95,14 @@ my $end_index = undef; # takes the value of #folds if left undefined
 my $cvfoldfile = undef;
 my $outfile;
 my $tftab;
+my $coursera_dump_version = 2; #default
 
 $help = 1 unless GetOptions(
 				'allf'			=>	\$allfeatures,
 				'dbname=s'		=>	\$dbname,
 				'dumpdb=s'		=>	\$mysqldbname,
 				'course=s'		=>	\$courseid,
+				'version=i'		=> \$coursera_dump_version,
 				'cvfile=s'		=>	\$cvfoldfile,
 				'folds=i'		=>	\$num_folds,
 				'sindex=i'		=>	\$start_index,	# index to start the cv loop at
@@ -163,6 +164,9 @@ my $log_file_name 	= "$progname"."_$courseid";
 open (my $log ,">$path/../logs/$log_file_name.log")
 				or die "cannot open file $path/../logs/$log_file_name.log for writing";
 
+print "Running $progname for course-$courseid \t couseradump version-$coursera_dump_version";
+print $log "Running $progname for course-$courseid \t couseradump version-$coursera_dump_version";
+				
 if($allfeatures){
 	print $log "\n May include non-unigram features: tftype: $tftype idftype:$idftype\n";
 }
@@ -585,7 +589,8 @@ foreach my $type ("test","training"){
 														$exp_path, $feature_file,
 														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
 														$debug, $pdtb_exp, $pdtb_imp, $viewed, 
-														$pdtbfilepath, $removed_files, $print_format
+														$pdtbfilepath, $removed_files, $print_format,
+														$coursera_dump_version
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open $tmp_file file for reading \n $!";

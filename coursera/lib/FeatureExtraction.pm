@@ -43,7 +43,7 @@ sub generateTrainingFile{
 			$path, $feature_file,
 			$course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
 			$debug, $pdtb_exp, $pdtb_imp, $viewed, 
-			$pdtbfilepath, $removed_files, $print_format
+			$pdtbfilepath, $removed_files, $print_format, $coursera_dump_version
 		) = @_;
 
 	my @courses = keys %{$course_samples};
@@ -258,13 +258,12 @@ sub generateTrainingFile{
 	
 	my %inst_viewed_threads;
 	if($viewed){
-		#my $access_group_id_query 	= "select id from access_groups 
-		#									where name in ('Instructor', 'Teaching Staff', 'Staff', 'Community TA')";
+		#my $access_group_id_query 	= "select id from access_groups where name in ('Instructor', 'Teaching Staff', 'Staff', 'Community TA')";
 		#my $accessids_ref			= $dbh->selectall_arrayref($access_group_id_query,'user_id')
 		#									or die "query failed: $access_group_id_query \n $DBI::errstr";
 		#my $accessids				= @$accessids_ref;
-		my $dbhmysql		 			= Model::getDBHandle(undef,1,'mysql',$mysqldbname);
-		my $inst_viewed_threads_local 	= getInstViewedThreads($dbhmysql);
+		my $dbhmysql = Model::getDBHandle(undef, 1, 'mysql', $mysqldbname);
+		my $inst_viewed_threads_local = getInstViewedThreads($dbhmysql,$coursera_dump_version);
 		
 		foreach my $id (keys %$inst_viewed_threads_local){         #item_id, user_id, timestamp
 			$inst_viewed_threads{ $inst_viewed_threads_local->{$id}{'item_id'} } =  $inst_viewed_threads_local->{$id}{'timestamp'};
@@ -1091,10 +1090,6 @@ sub generateTrainingFile{
 					$term_vector->{$tid} = $term_vector->{$tid} / $sum_of_squares;
 				}
 			}
-
-			if($viewed){
-			
-			}
 			
 		    if($pdtb_exp){
 				print $log "adding pdtb relation feature..\n";
@@ -1513,12 +1508,26 @@ sub generateTrainingFile{
 }
 
 sub getInstViewedThreads{
-	my ($dbh) = @_;
+	my ($dbh, $coursera_dump_version) = @_;
 	# my $instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7,10) and u.session_user_id = h.session_user_id";
 	# 4,5,6,9 - students
-	my $instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7) and u.session_user_id = h.session_user_id";
-	my $instructors_ref			= $dbh->selectall_hashref($instructors_query,'user_id')
+												
+	my $instructors_query;
+	my $instructors_ref;
+	
+	if($coursera_dump_version eq 1){
+		$instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7) 
+										and u.session_user_id = h.anon_user_id";	
+		$instructors_ref		= $dbh->selectall_hashref($instructors_query,'user_id')
 										or die "query failed: $instructors_query \n $DBI::errstr";
+	}
+	elsif($coursera_dump_version eq 2){
+		$instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7) 
+										and u.session_user_id = h.session_user_id";	
+		$instructors_ref		= $dbh->selectall_hashref($instructors_query,'user_id')
+										or die "query failed: $instructors_query \n $DBI::errstr";	
+	}
+	
 	my @instructors				= keys %{$instructors_ref};
 	
 	my $threads_viewed_query	= "select id, item_id, user_id, timestamp from activity_log where action = 'view.thread' and user_id in (";
