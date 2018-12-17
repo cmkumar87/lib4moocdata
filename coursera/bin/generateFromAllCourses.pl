@@ -61,6 +61,7 @@ my $quite				= 0;
 my $debug				= 0;
 my $dbname				= undef;
 my $corpus_name			= undef;
+my $mysqldbname			= undef;
 
 my $samplemode 			= 'all';
 my $freqcutoff 			= undef;
@@ -71,18 +72,19 @@ my $idftype				= 'none';
 
 my $numposts			= 0;
 my $forumtype			= 0;
-my $affirmations		= 0;
-my $nonterm_courseref 	= 0;
 my $tprop				= 0;
 my $numw				= 0;
 my $numsentences 		= 0;
+
+my $courseref			= 0;
+my $nonterm_courseref 	= 0;
+my $affirmations		= 0;
+
 my $pdtb 				= 0;
 my $pdtb_imp			= 0;
 my $pdtb_exp			= 0;
+my $viewed				= 0;
 
-my $agree				= 0;
-
-my $courseref			= 0;
 my $unigrams			= 0;
 my $bigrams				= 0;
 
@@ -96,13 +98,17 @@ my $print_format		= 'none';
 my $start_index			= 0;
 my $end_index			= undef; # takes the value of #folds if left undefined
 my $intervention_delay  = 0;
+my $agree				= 0;
 
 my $outfile;
 my $tftab;
+my $coursera_dump_version = 2; #default
 
 $help = 1 unless GetOptions(
 				'corpus=s'		=> 	\$corpus_name,
 				'dbname=s'		=>	\$dbname,
+				'dumpdb=s'		=>	\$mysqldbname,
+				'version=i'		=>  \$coursera_dump_version,
 				'folds=i'		=>	\$num_folds,
 				'holdc'			=>	\$hold_out_course,
 				'sindex=i'		=>	\$start_index,	# index to start the cv loop at
@@ -331,7 +337,9 @@ my @edm 				= (31);
 my @proposed			= (32, 64, 63, 95, 127);
 my @pdtb_feature		= (64);
 #my @iterations			= (0, 31, 32, 64, 63, 95, 127);
-my @iterations			= (223, 159, 95, 31, 64);
+#my @iterations			= (223, 159, 95, 31);
+#Viewed Feature Set
+my @iterations			= (31, 64, 415, 287, 479, 159, 223, 128);
 
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
@@ -509,9 +517,10 @@ foreach my $type ("train","test"){
 				$numsentences 		= $d3;
 				$nonterm_courseref	= $d4;
 				$agree				= $d5;
-				# $pdtb 				= $d6;
+				# $pdtb 			= $d6;
 				$pdtb_exp			= $d6;
 				$pdtb_imp			= $d7;
+				$courseref			= $d8;
 			}
 			
 			# output file
@@ -524,7 +533,8 @@ foreach my $type ("train","test"){
 			#$outfile  .=  $d6 	? "pdtb+"	 		: "";
 			$outfile  .=  $d6 	? "exppdtb+" 		: "";
 			$outfile  .=  $d7 	? "imppdtb+" 		: "";
-			$outfile  .=  $d7	? "course+" 		: "";
+			$outfile  .=  $d8 	? "viewedins+" 		: "";
+			$outfile  .=  $d9	? "course+" 		: "";
 			
 			$outfile	.=  "_$type" . "_$fold.txt";
 			
@@ -540,7 +550,8 @@ foreach my $type ("train","test"){
 			#$feature_file .= $d6 	? "+pdtb"	 	: "";
 			$feature_file .= $d6 	? "+exppdtb" 	: "";
 			$feature_file .= $d7 	? "+imppdtb" 	: "";
-			$feature_file .= $d7	? "+course" 	: "";
+			$feature_file .= $d8 	? "+viewedins" 	: "";
+			$feature_file .= $d9	? "+course" 	: "";
 
 			$feature_file .= "_$fold.txt";
 			
@@ -620,14 +631,16 @@ foreach my $type ("train","test"){
 			
 			open (my $FH1, ">$tmp_file") or die "cannot open features file $!";
 			open (my $FEXTRACT, ">$error_log_file") or die "cannot open features file$!";
-			FeatureExtraction::generateTrainingFile(	$FH1, $dbh, \%threadcats, 
+			FeatureExtraction::generateTrainingFile(	$FH1, $dbh, $mysqldbname, \%threadcats, 
 														$unigrams, $freqcutoff, $stem, $term_length_cutoff, $tftype, $idftype,
 														$tprop, $numw, $numsentences, 
 														$courseref, $nonterm_courseref, $affirmations, $agree,
 														$numposts, $forumtype, 
 														$exp_path, $feature_file,
 														\%course_samples, $corpus, $corpus_type, $FEXTRACT, $log,
-														$debug, $pdtb_exp, $pdtb_imp, $pdtbfilepath, $removed_files, $print_format
+														$debug, $pdtb_exp, $pdtb_imp, $viewed,
+														$pdtbfilepath, $removed_files, $print_format,
+														$coursera_dump_version
 													);
 			close $FH1;
 			open (my $IN, "<$tmp_file") or die "cannot open features file $!";
