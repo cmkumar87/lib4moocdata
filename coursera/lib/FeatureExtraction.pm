@@ -1161,6 +1161,7 @@ sub generateTrainingFile{
 			}
 	
 		    if($viewed){
+				print $log "adding 1st party viewed feature..\n";
 				$nontermfeaturecount++;
 				if ( !exists $inst_viewed_threads{$threadid} ){
 					$term_vector->{$nontermfeaturecount} = 0;
@@ -1517,7 +1518,7 @@ sub getInstViewedThreads{
 	
 	if($coursera_dump_version eq 1){
 		$instructors_query		= "select user_id from users u, hash_mapping h where access_group_id in (2,3,7) 
-										and u.session_user_id = h.anon_user_id";	
+										and u.anon_user_id = h.anon_user_id";	
 		$instructors_ref		= $dbh->selectall_hashref($instructors_query,'user_id')
 										or die "query failed: $instructors_query \n $DBI::errstr";
 	}

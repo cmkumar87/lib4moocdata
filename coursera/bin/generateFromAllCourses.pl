@@ -339,8 +339,7 @@ my @pdtb_feature		= (64);
 #my @iterations			= (0, 31, 32, 64, 63, 95, 127);
 #my @iterations			= (223, 159, 95, 31);
 #Viewed Feature Set
-my @iterations			= (31, 64, 415, 287, 479, 159, 223, 128);
-
+my @iterations			= (31, 64, 351, 415, 287, 479, 159, 223, 128);
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
 	print "\n\n Did you forget to switch 'allf' on?";
