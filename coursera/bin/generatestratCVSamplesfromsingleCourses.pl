@@ -207,7 +207,6 @@ my @edm_plus_pdtb_exp = (95);
 # my @iterations			= (256, 479);
 #Viewed Feature Set
 my @iterations				= (351, 415, 287, 479, 159, 223, 128);
-my @iterations				= (351);
 #sanity check
 if(!$allfeatures && scalar @iterations > 1){
 	print "\n\n Did you forget to switch 'allf' on?";
