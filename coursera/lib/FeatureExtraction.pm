@@ -1531,15 +1531,22 @@ sub getInstViewedThreads{
 	
 	my @instructors				= keys %{$instructors_ref};
 	
-	my $threads_viewed_query	= "select id, item_id, user_id, timestamp from activity_log where action = 'view.thread' and user_id in (";
-
-	my $userstring 				= join(",",@instructors);
-	$threads_viewed_query		.= "$userstring);";
+	my $threads_viewed_query;
+	
+	if($coursera_dump_version eq 1){
+		$threads_viewed_query = "select id, item_id, forum_user_id, timestamp from activity_log where action = 'view.thread' and forum_user_id in (";
+	}
+	elsif($coursera_dump_version eq 2){
+		$threads_viewed_query = "select id, item_id, user_id, timestamp from activity_log where action = 'view.thread' and user_id in (";
+	}
+	
+	my $userstring = join(",",@instructors);
+	$threads_viewed_query .= "$userstring);";
 		
 	print "\n Executing... $threads_viewed_query \n ";
 		
-	my $threads_viewed			= $dbh->selectall_hashref($threads_viewed_query,'id')
-										or die "query failed: $threads_viewed_query \n $DBI::errstr";
+	my $threads_viewed	= $dbh->selectall_hashref($threads_viewed_query,'id')
+							or die "query failed: $threads_viewed_query \n $DBI::errstr";
 	return $threads_viewed;
 }
 
